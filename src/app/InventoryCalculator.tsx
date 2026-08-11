@@ -102,13 +102,13 @@ export default function InventoryCalculator() {
             <h2>送單與 POST 預覽</h2>
           </div>
           <span className={`status-pill ${result.error ? "danger" : "success"}`}>
-            {result.error ? "不可送出" : "可送出"}
+            {result.error ? "規則拒絕" : "規則通過（預覽）"}
           </span>
         </div>
 
         {result.error ? (
           <div className="error-box" role="alert">
-            <strong>伺服器規則會拒絕此輸入</strong>
+            <strong>送單規則會拒絕此輸入</strong>
             <span>{result.error}</span>
           </div>
         ) : (
@@ -134,7 +134,7 @@ export default function InventoryCalculator() {
               </div>
             </dl>
             <p className="success-note">
-              人資送出後先建立合計預留；倉庫完成理貨、準備交付時才 POST，成功後才可將制服交給員工。
+              目前此頁只做本機預覽，不會建立資料；正式送單必須由 Supabase RPC 重新驗證並建立合計預留。倉庫完成理貨、準備交付時才 POST，成功後才可將制服交給員工。
             </p>
           </>
         )}

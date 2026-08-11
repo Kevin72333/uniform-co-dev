@@ -13,7 +13,7 @@ export type RequestSummary = {
   canSubmit: true;
 };
 
-export type WarehousePostInput = Omit<InventoryRequestInput, "activeReserved"> & {
+export type WarehousePostInput = InventoryRequestInput & {
   actualTransfer: number;
   shortShipReason?: string;
 };
@@ -67,7 +67,7 @@ export function calculateRequestSummary(input: InventoryRequestInput): RequestSu
 
 export function calculateWarehousePost(input: WarehousePostInput): WarehousePostResult {
   const { actualTransfer, shortShipReason, ...requestInput } = input;
-  const summary = calculateRequestSummary({ ...requestInput, activeReserved: 0 });
+  const summary = calculateRequestSummary(requestInput);
   assertNonNegativeInteger("actualTransfer", actualTransfer);
 
   const maximumTransfer = Math.min(summary.requestedTransfer, input.generalOnHand);

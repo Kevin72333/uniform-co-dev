@@ -38,6 +38,7 @@ describe("uniform inventory request seam", () => {
     const result = calculateWarehousePost({
       hrOnHand: 5,
       generalOnHand: 100,
+      activeReserved: 0,
       issueQuantity: 10,
       increaseQuantity: 0,
       actualTransfer: 10,
@@ -59,6 +60,7 @@ describe("uniform inventory request seam", () => {
       calculateWarehousePost({
         hrOnHand: 20,
         generalOnHand: 3,
+        activeReserved: 0,
         issueQuantity: 10,
         increaseQuantity: 0,
         actualTransfer: 2,

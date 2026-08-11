@@ -12,7 +12,7 @@
 - `npm run build` 建立 Next.js production bundle。
 - `npm run dev` 啟動本機介面；沒有 Supabase env 時仍可使用預覽試算。
 
-Supabase migration 位於 `supabase/migrations/0001_uniform_foundation.sql`，目前涵蓋主檔、兩倉餘額、人資需求、合計預留與 `submit_hr_request` RPC。正式上線前仍需補齊其餘流程 migration、Supabase project secrets、鼎新欄位映射與角色初始資料。
+Supabase migration 位於 `supabase/migrations/0001_uniform_foundation.sql`，目前涵蓋核心主檔、供應商條件、兩倉餘額、受 RLS 保護的 HR 草稿、人資需求、歷史快照、冪等 `operation_commands`、品號鎖與合計預留 `submit_hr_request` RPC。正式上線前仍需補齊倉庫 POST、採購入庫、季節採購、PDF／ERP 與期初切換 migration，以及 Supabase project secrets、鼎新欄位映射與角色初始資料。
 
 ## 文件索引
 
