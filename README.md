@@ -12,7 +12,7 @@
 - `npm run build` 建立 Next.js production bundle。
 - `npm run dev` 啟動本機介面；沒有 Supabase env 時仍可使用預覽試算。
 
-Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql` 涵蓋核心主檔、供應商條件、兩倉餘額、受 RLS 保護的 HR 草稿、人資需求、歷史快照、冪等 `operation_commands`、品號鎖與合計預留 `submit_hr_request` RPC；`0002_warehouse_shipping.sql` 新增倉庫發貨草稿、固定鎖序的 `post_warehouse_shipment` RPC、總倉調出／人資倉調入／發放流水及 POSTED 鎖單；`0003_replenishment.sql` 新增不建立預留的補庫送出與 POST；`0004_stocktake.sql` 新增依 balance version fencing 的盤點 POST 與 `STALE_COUNT`。正式上線前仍需補齊更正、退回、採購入庫、季節採購、PDF／ERP 與期初切換 migration，以及 Supabase project secrets、鼎新欄位映射與角色初始資料。
+Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql` 涵蓋核心主檔、供應商條件、兩倉餘額、受 RLS 保護的 HR 草稿、人資需求、歷史快照、冪等 `operation_commands`、品號鎖與合計預留 `submit_hr_request` RPC；`0002_warehouse_shipping.sql` 新增倉庫發貨草稿、固定鎖序的 `post_warehouse_shipment` RPC、總倉調出／人資倉調入／發放流水及 POSTED 鎖單；`0003_replenishment.sql` 新增不建立預留的補庫送出與 POST；`0004_stocktake.sql` 新增依 balance version fencing 的盤點 POST 與 `STALE_COUNT`；`0005_returns.sql` 新增原始發放明細同源驗證的退回 POST。正式上線前仍需補齊更正、採購入庫、季節採購、PDF／ERP 與期初切換 migration，以及 Supabase project secrets、鼎新欄位映射與角色初始資料。
 
 ## 文件索引
 
