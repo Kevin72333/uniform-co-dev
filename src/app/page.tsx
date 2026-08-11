@@ -1,6 +1,7 @@
 import InventoryCalculator from "./InventoryCalculator";
 import HrRequestWorkbench from "./HrRequestWorkbench";
 import AuthPanel from "./AuthPanel";
+import EmployeeImportPanel from "./EmployeeImportPanel";
 
 export default function Home() {
   return (
@@ -18,6 +19,7 @@ export default function Home() {
       <AuthPanel />
       <InventoryCalculator />
       <HrRequestWorkbench />
+      <EmployeeImportPanel />
     </main>
   );
 }
