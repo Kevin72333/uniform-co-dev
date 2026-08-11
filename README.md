@@ -4,10 +4,10 @@
 
 ## 第一個可執行切片
 
-目前已接上 Next.js／TypeScript 試算介面與 Supabase foundation migration：
+目前已接上 Next.js／TypeScript 試算介面、員工明細／品號彙總工作台與 Supabase foundation migration：
 
 - `npm install` 安裝依賴。
-- `npm test` 執行 F/I/R/T/D 庫存規則測試。
+- `npm test` 執行 F/I/R/T/D 庫存規則與人資需求明細彙總測試。
 - `npm run typecheck` 執行 TypeScript 檢查。
 - `npm run build` 建立 Next.js production bundle。
 - `npm run dev` 啟動本機介面；沒有 Supabase env 時仍可使用預覽試算。
