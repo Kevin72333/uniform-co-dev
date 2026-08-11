@@ -1,5 +1,6 @@
 import InventoryCalculator from "./InventoryCalculator";
 import HrRequestWorkbench from "./HrRequestWorkbench";
+import AuthPanel from "./AuthPanel";
 
 export default function Home() {
   return (
@@ -14,6 +15,7 @@ export default function Home() {
         </div>
         <span className="status-pill">預覽模式</span>
       </header>
+      <AuthPanel />
       <InventoryCalculator />
       <HrRequestWorkbench />
     </main>
