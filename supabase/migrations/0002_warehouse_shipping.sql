@@ -326,6 +326,9 @@ begin
 
     maximum_transfer := least(item_row.requested_transfer_quantity, general_on_hand);
     actual_transfer := line_row.actual_transfer_quantity;
+    if actual_transfer < 0 then
+      raise exception 'Actual transfer cannot be negative for item %', item_row.item_id;
+    end if;
     if actual_transfer > maximum_transfer then
       raise exception 'Actual transfer exceeds the locked GENERAL warehouse maximum for item %', item_row.item_id;
     end if;
