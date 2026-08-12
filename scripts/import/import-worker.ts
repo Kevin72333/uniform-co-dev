@@ -184,6 +184,7 @@ async function failChunk(chunk: ImportChunk, error: unknown, retryable: boolean)
 }
 
 async function processChunk(batch: ImportBatch, phase: "PARSE" | "VALIDATE"): Promise<void> {
+  if (phase === "PARSE") await scalar<number>("prepare_import_chunks", [batch.id, phase], "prepared");
   const claimPayload = { batch_id: batch.id, phase, lease_seconds: leaseSeconds };
   const claimKey = `IMPORT-CLAIM-${batch.id}-${phase}-${randomUUID()}`;
   const chunk = await callOne<ImportChunk>("claim_import_chunk", [batch.id, phase, leaseSeconds, claimKey, fingerprint(claimPayload)]);

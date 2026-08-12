@@ -35,7 +35,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [ADR：人資送單預留、倉庫發貨過帳](./docs/adr/0003-reserve-before-warehouse-posting.md)
 - [部署與同步 Runbook](./docs/deployment/runbook.md)
 
-Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048` → `0056`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，提供 definitive parser failure 狀態轉換，最後讓受控 `job_import_worker` 確認由使用者上傳的 object（保留原 uploader attribution）並進入解析。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
+Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048` → `0056` → `0058`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，提供 definitive parser failure 狀態轉換，最後讓受控 `job_import_worker` 確認由使用者上傳的 object（保留原 uploader attribution）並進入解析；`0058` 也會在 worker batch lock 內修復 0046 以前遺留的 oversized PARSE chunk。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
 
 ## 尚待提供
 
@@ -49,7 +49,7 @@ Durable import worker 的 forward migration 順序為 `0045` → `0046` → `004
 
 可立即依[實作路線圖](./docs/implementation/roadmap.md)開始第 0 階段蒐集與技術驗證。鼎新樣本阻擋第 4 階段驗收；主檔與期初樣本阻擋第 5 階段切換；列印樣式、帳號清單、備份還原與三年容量 gate 則分別阻擋文件、使用者及正式上線驗收。
 
-Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`：reference snapshot、bounded chunks、worker/uploader actor separation、malformed-upload failure，以及受控 worker 對上傳物件的確認都已納入；實際 Supabase/RLS/Storage smoke 仍需受保護 staging worker 執行。
+Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`、`0058`：reference snapshot、bounded chunks、worker/uploader actor separation、malformed-upload failure、受控 worker 對上傳物件的確認，以及 legacy oversized chunk repair 都已納入；實際 Supabase/RLS/Storage smoke 仍需受保護 staging worker 執行。
 
 `0049_receipt_correction_reconciliation.sql` 是採購入庫更正的 forward fix：更正 POST 會以本次 delta 過帳、在鎖內重算有效數量與採購配置，必要時將不足預留轉為衝突並記錄 PO 重開原因；更正狀態查詢 RPC 支援瀏覽器回應遺失後恢復。實際 Supabase 交易／鎖序仍需 staging smoke 驗證。
 
