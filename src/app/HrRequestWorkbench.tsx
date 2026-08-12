@@ -65,11 +65,16 @@ const initialLines: LineState[] = [
   { lineId: "line-1", employeeId: "employee-1", itemId: "item-m", quantity: 10 },
 ];
 
+function taipeiToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+}
+
 export default function HrRequestWorkbench() {
   const client = getSupabaseBrowserClient();
   const [employeeOptions, setEmployeeOptions] = useState<EmployeeSnapshot[]>(employees);
   const [itemOptions, setItemOptions] = useState<UniformItemSnapshot[]>(items);
   const [lines, setLines] = useState<LineState[]>(initialLines);
+  const [distributionDate, setDistributionDate] = useState(taipeiToday());
   const [increases, setIncreases] = useState<Record<string, number>>({
     "item-m": 0,
     "item-l": 0,
@@ -77,6 +82,7 @@ export default function HrRequestWorkbench() {
   const [dataMessage, setDataMessage] = useState("");
   const [submitMessage, setSubmitMessage] = useState("");
   const [loadingData, setLoadingData] = useState(false);
+  const [dataReady, setDataReady] = useState(!client);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -97,6 +103,7 @@ export default function HrRequestWorkbench() {
       if (!active) return;
       if (employeeResult.error || institutionResult.error || departmentResult.error || itemResult.error || warehouseResult.error || balanceResult.error || reservationResult.error) {
         setDataMessage("正式主檔載入失敗，暫以測試資料預覽；請確認角色與 RLS 權限。");
+        setDataReady(false);
         setLoadingData(false);
         return;
       }
@@ -138,8 +145,10 @@ export default function HrRequestWorkbench() {
         setLines([{ lineId: `line-${Date.now()}`, employeeId: employeeRows[0].employeeId, itemId: itemRows[0].itemId, quantity: 1 }]);
         setIncreases(Object.fromEntries(itemRows.map((item) => [item.itemId, 0])));
         setDataMessage(`已載入 ${employeeRows.length} 位在職員工、${itemRows.length} 個啟用品號`);
+        setDataReady(true);
       } else {
         setDataMessage("正式主檔沒有可用的在職員工或制服品號。");
+        setDataReady(false);
       }
       setLoadingData(false);
     }
@@ -201,6 +210,10 @@ export default function HrRequestWorkbench() {
       setSubmitMessage("預覽模式：設定 Supabase env 並登入 HR 帳號後才能建立草稿與送出預留。");
       return;
     }
+    if (!distributionDate) {
+      setSubmitMessage("請先填寫發放日期。");
+      return;
+    }
     if (!result.summary || result.error) {
       setSubmitMessage("請先修正送出前檢查錯誤。");
       return;
@@ -214,7 +227,7 @@ export default function HrRequestWorkbench() {
       .filter((line) => line.quantity > 0);
     const { data: draft, error: draftError } = await client.rpc("create_hr_request_draft", {
       p_request_no: `HR-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`,
-      p_distribution_date: new Date().toISOString().slice(0, 10),
+      p_distribution_date: distributionDate,
       p_note: null,
       p_issue_lines: issuePayload,
       p_increase_lines: increasePayload,
@@ -246,6 +259,7 @@ export default function HrRequestWorkbench() {
           <span className={`status-pill ${loadingData ? "" : dataMessage ? "success" : ""}`}>{loadingData ? "載入正式資料…" : client ? "Supabase 資料" : "測試資料預覽"}</span>
         </div>
 
+        <label className="field date-field"><span>發放日期</span><input type="date" value={distributionDate} onChange={(event) => setDistributionDate(event.target.value)} disabled={submitting || loadingData} required /></label>
         <div className="request-table" role="table" aria-label="發放明細">
           <div className="request-table-row request-table-header" role="row">
             <span>員工／機構</span>
@@ -302,7 +316,7 @@ export default function HrRequestWorkbench() {
         <button className="secondary-button" type="button" onClick={addLine}>
           ＋新增員工明細
         </button>
-        <button className="primary-button" type="button" onClick={() => void submitRequest()} disabled={submitting || loadingData || Boolean(result.error)}>
+        <button className="primary-button" type="button" onClick={() => void submitRequest()} disabled={submitting || loadingData || !dataReady || Boolean(result.error)}>
           {submitting ? "送出中…" : "建立草稿並送出"}
         </button>
         {dataMessage ? <p className="auth-message" role="status">{dataMessage}</p> : null}

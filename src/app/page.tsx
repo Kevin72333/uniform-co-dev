@@ -3,6 +3,7 @@ import HrRequestWorkbench from "./HrRequestWorkbench";
 import AuthPanel from "./AuthPanel";
 import EmployeeImportPanel from "./EmployeeImportPanel";
 import MasterDataPanel from "./MasterDataPanel";
+import WarehouseShipmentPanel from "./WarehouseShipmentPanel";
 
 export default function Home() {
   return (
@@ -22,6 +23,7 @@ export default function Home() {
       <HrRequestWorkbench />
       <EmployeeImportPanel />
       <MasterDataPanel />
+      <WarehouseShipmentPanel />
     </main>
   );
 }
