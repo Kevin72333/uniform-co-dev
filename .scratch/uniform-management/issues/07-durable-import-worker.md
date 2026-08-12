@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] 解析前驗證 signature、MIME、解壓後大小、entry/列/欄/cell 上限、公式／巨集／外部連結／NUL／path traversal，且 parser 不執行公式或網路請求
+- [x] Repo parser 契約已提供 bounded CSV/XLSX signature、MIME、UTF-8、解壓大小、ZIP entry／壓縮比、工作表／列／欄／cell 上限、公式／巨集／外部連結／NUL／path traversal 防線與測試；仍需由受控 worker 讀 Storage bytes 並在 staging 驗證實際 OOXML fixture
 - [ ] `claim_import_chunk`、heartbeat、complete、fail、cursor CAS 與 lease takeover 在 staging DB 通過並行 smoke
-- [ ] EMPLOYEES preview 能分類 INSERT／UPDATE／SKIP／ERROR，逐列差異與錯誤可查詢，SKIP/ERROR 不會套用
+- [ ] EMPLOYEES preview 能由 worker 比對現有主檔分類 INSERT／UPDATE／SKIP／ERROR，逐列差異與錯誤可查詢，SKIP/ERROR 不會套用
 - [ ] `confirm_import_batch` 是必要且可查回的 durable gate；zero-diff batch 也不能跳過確認
 - [ ] APPLY 以 batch lease/fencing、角色與 PRE_CUTOVER once-only 條件整批交易完成；任何列失敗不發布正式資料
