@@ -93,9 +93,11 @@ create or replace function private.prevent_ready_document_mutation()
 returns trigger language plpgsql security definer set search_path = pg_catalog, private as $$
 begin
   if tg_table_name='document_artifact_families' then
+    if tg_op = 'DELETE' then raise exception 'Document family is immutable'; end if;
     if old.document_type<>new.document_type or old.document_id<>new.document_id or old.artifact_kind<>new.artifact_kind then raise exception 'Document family identity is immutable'; end if;
     if old.artifact_kind<>'DRAFT_WATERMARK' and (old.source_snapshot_version<>new.source_snapshot_version or old.source_snapshot_hash<>new.source_snapshot_hash) then raise exception 'Formal document family snapshot is immutable'; end if;
   elsif tg_table_name='document_artifacts' and old.status='READY' then
+    if tg_op = 'DELETE' then raise exception 'READY document payload is immutable'; end if;
     if old.id<>new.id or old.family_id<>new.family_id or old.revision<>new.revision or old.idempotency_key<>new.idempotency_key or old.request_fingerprint<>new.request_fingerprint or old.template_version<>new.template_version or old.source_snapshot_version<>new.source_snapshot_version or old.source_snapshot_hash<>new.source_snapshot_hash or old.storage_object_key is distinct from new.storage_object_key or old.payload_sha256 is distinct from new.payload_sha256 or old.winning_attempt_id is distinct from new.winning_attempt_id or new.status<>'READY' or new.is_current and not old.is_current then raise exception 'READY document payload is immutable'; end if;
   elsif tg_table_name='document_render_attempts' and exists(select 1 from public.document_artifacts a where a.id=old.artifact_id and a.status='READY') then
     raise exception 'Attempts for READY document artifacts are immutable';
@@ -108,6 +110,7 @@ begin
   if tg_table_name='erp_export_batches' then
     if old.batch_no<>new.batch_no or old.export_kind<>new.export_kind or old.distribution_date<>new.distribution_date or old.institution_id_snapshot<>new.institution_id_snapshot or old.institution_code_snapshot<>new.institution_code_snapshot or old.institution_name_snapshot<>new.institution_name_snapshot or old.source_snapshot_version<>new.source_snapshot_version or old.source_snapshot_hash<>new.source_snapshot_hash or old.prepared_at<>new.prepared_at or old.prepared_by<>new.prepared_by then raise exception 'ERP batch snapshot is immutable'; end if;
   elsif tg_table_name='erp_export_artifacts' and old.status='READY' then
+    if tg_op = 'DELETE' then raise exception 'READY ERP payload is immutable'; end if;
     if old.id<>new.id or old.batch_id<>new.batch_id or old.revision<>new.revision or old.idempotency_key<>new.idempotency_key or old.request_fingerprint<>new.request_fingerprint or old.format_version<>new.format_version or old.source_snapshot_version<>new.source_snapshot_version or old.source_snapshot_hash<>new.source_snapshot_hash or old.storage_object_key is distinct from new.storage_object_key or old.payload_sha256 is distinct from new.payload_sha256 or old.winning_attempt_id is distinct from new.winning_attempt_id or new.status<>'READY' or new.is_current and not old.is_current then raise exception 'READY ERP payload is immutable'; end if;
   elsif exists(select 1 from public.erp_export_artifacts a where a.id=old.artifact_id and a.status='READY') then raise exception 'Attempts for READY ERP artifacts are immutable'; end if;
   return new;
@@ -133,9 +136,30 @@ revoke update, delete, truncate on table storage.objects from job_document_rende
 drop policy if exists uniform_pdf_renderer_select on storage.objects;
 create policy uniform_pdf_renderer_select on storage.objects for select to job_document_renderer using (bucket_id = 'uniform-pdf');
 create policy uniform_pdf_renderer_insert on storage.objects for insert to job_document_renderer with check (bucket_id = 'uniform-pdf');
+drop policy if exists uniform_pdf_ready_read on storage.objects;
+create policy uniform_pdf_ready_read on storage.objects for select to authenticated using (
+  bucket_id = 'uniform-pdf' and exists (
+    select 1 from public.document_artifacts a
+    join public.document_artifact_families f on f.id = a.family_id
+    where a.status = 'READY' and a.is_current and f.current_artifact_id = a.id
+      and a.storage_object_key = name
+      and ((f.document_type = 'HR_REQUEST' and private.has_role('HR'))
+        or (f.document_type = 'STOCKTAKE' and (private.has_role('HR') or private.has_role('WAREHOUSE')))
+        or (f.document_type = 'RETURN_NOTE' and private.has_role('HR')))
+  )
+);
 drop policy if exists uniform_erp_renderer_select on storage.objects;
 create policy uniform_erp_renderer_select on storage.objects for select to job_erp_renderer using (bucket_id = 'uniform-erp');
 create policy uniform_erp_renderer_insert on storage.objects for insert to job_erp_renderer with check (bucket_id = 'uniform-erp');
+drop policy if exists uniform_erp_ready_read on storage.objects;
+create policy uniform_erp_ready_read on storage.objects for select to authenticated using (
+  bucket_id = 'uniform-erp' and exists (
+    select 1 from public.erp_export_artifacts a
+    join public.erp_export_batches b on b.id = a.batch_id
+    where a.status = 'READY' and a.is_current and b.current_artifact_id = a.id
+      and a.storage_object_key = name and (private.has_role('HR') or private.has_role('WAREHOUSE'))
+  )
+);
 
 create or replace function private.require_document_renderer()
 returns uuid language plpgsql security definer set search_path = pg_catalog, private as $$
@@ -164,6 +188,8 @@ returns public.document_render_attempts language plpgsql security definer set se
 declare r public.document_render_attempts; a public.document_artifact_families; x public.document_artifacts;
 begin
   perform private.require_document_renderer();
+  if p_payload_sha256 is null or p_payload_sha256 !~ '^[0-9a-fA-F]{64}$' or p_payload_size_bytes is null or p_payload_size_bytes <= 0 or p_payload_size_bytes > 20000000 then raise exception 'invalid document payload metadata' using errcode='22023'; end if;
+  if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   for a in select f.* from public.document_artifact_families f where f.active_artifact_id is not null and exists (select 1 from public.document_artifacts da join public.document_render_attempts dt on dt.artifact_id=da.id where da.id=f.active_artifact_id and da.status='PREPARING' and (dt.status='PENDING' or (dt.status='RENDERING' and dt.lease_expires_at<=transaction_timestamp()))) order by f.id for update skip locked loop
     select * into x from public.document_artifacts where id=a.active_artifact_id and status='PREPARING' for update;
@@ -242,6 +268,7 @@ declare r public.erp_export_render_attempts; b public.erp_export_batches; x publ
 begin
   perform private.require_erp_renderer();
   if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
+  if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   for b in select q.* from public.erp_export_batches q where q.active_artifact_id is not null and exists (select 1 from public.erp_export_artifacts ea join public.erp_export_render_attempts et on et.artifact_id=ea.id where ea.id=q.active_artifact_id and ea.status='PREPARING' and (et.status='PENDING' or (et.status='RENDERING' and et.lease_expires_at<=transaction_timestamp()))) order by q.id for update skip locked loop
     select * into x from public.erp_export_artifacts where id=b.active_artifact_id and status='PREPARING' for update;
     if not found then continue; end if;
@@ -297,6 +324,7 @@ returns public.erp_export_artifacts language plpgsql security definer set search
 declare r public.erp_export_render_attempts; x public.erp_export_artifacts; b public.erp_export_batches; h text; n bigint; actor_id uuid;
 begin
   actor_id := private.require_erp_renderer();
+  if p_payload_sha256 is null or p_payload_sha256 !~ '^[0-9a-fA-F]{64}$' or p_payload_size_bytes is null or p_payload_size_bytes <= 0 or p_payload_size_bytes > 20000000 then raise exception 'invalid ERP payload metadata' using errcode='22023'; end if;
   select artifact_id into strict x.id from public.erp_export_render_attempts where id=p_attempt_id;
   select batch_id into strict x.batch_id from public.erp_export_artifacts where id=x.id;
   select * into strict b from public.erp_export_batches where id=x.batch_id for update;
