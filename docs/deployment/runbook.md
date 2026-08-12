@@ -110,4 +110,4 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 
 `0059_receipt_correction_lockset_forward.sql` 必須在 0049 後套用；它在採購入庫更正處理預留衝突前重驗需求／品號集合，集合變動時以 40001 讓 caller 重試，避免跨品號更正持有部分鎖集合。
 
-`0060_pdf_document_type_coverage.sql` 必須在 0039／0041 後套用；它補齊八類 PDF 單據的來源鎖、canonical snapshot hash、renderer payload、角色授權與下載 policy。staging 必須逐一以 HR、WAREHOUSE、PROCUREMENT、CEO 驗證允許／拒絕矩陣，並對正式來源與草稿浮水印各跑一次 claim→payload→upload→finalize→download。
+`0060_pdf_document_type_coverage.sql` 必須在 0039／0041 後套用；它補齊八類 PDF 單據的來源鎖、canonical snapshot hash、renderer payload、角色授權與下載 policy。`0062_renderer_metadata_null_guard.sql` 必須在 0039 後套用，讓 finalize 對缺失／空白 Storage hash 或 size 一律拒絕，並以 `nullif` 正確 fallback 到 user metadata。staging 必須逐一以 HR、WAREHOUSE、PROCUREMENT、CEO 驗證允許／拒絕矩陣，並對正式來源與草稿浮水印各跑一次 claim→payload→upload→finalize→download。

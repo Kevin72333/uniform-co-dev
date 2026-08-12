@@ -69,4 +69,4 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`、`005
 
 `0059_receipt_correction_lockset_forward.sql` 在採購入庫更正調整庫存／預留前再次核對完整需求 reservation lock set；若並行交易在 item mutex 後新增其他品項預留，交易以 40001 重試而不使用部分集合。`0061_import_chunk_payload_bound.sql` 將解析 chunk 的 JSONB payload guard 提高至 25MB，保留單檔 10MB 上限但容納 JSON escaping／差異欄位的膨脹，不改寫既有匯入歷史。
 
-`0060_pdf_document_type_coverage.sql` 將同一個 snapshot／revision／renderer payload state machine 擴展到發貨、補庫、換季核准、採購單與採購入庫，並同步各角色的 request、payload、下載與 Storage read policy；正式公司版面與字型仍依待提供樣本調整。
+`0060_pdf_document_type_coverage.sql` 將同一個 snapshot／revision／renderer payload state machine 擴展到發貨、補庫、換季核准、採購單與採購入庫，並同步各角色的 request、payload、下載與 Storage read policy；`0062_renderer_metadata_null_guard.sql` 讓 PDF／ERP finalize 對缺失或空白 Storage hash／size metadata fail closed；正式公司版面與字型仍依待提供樣本調整。
