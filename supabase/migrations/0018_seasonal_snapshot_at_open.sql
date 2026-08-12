@@ -8,6 +8,14 @@ set search_path = pg_catalog, private
 as $$
 begin
   if new.status = 'OPEN' and old.status is distinct from 'OPEN' then
+    if exists (
+      select 1
+      from public.seasonal_campaign_employees ce
+      join public.employees e on e.id = ce.employee_id
+      where ce.campaign_id = new.id and e.employment_status <> 'ACTIVE'
+    ) then
+      raise exception 'An OPEN seasonal campaign cannot include inactive employees';
+    end if;
     update public.seasonal_campaign_employees ce
     set employee_no_snapshot = e.employee_no,
         employee_name_snapshot = e.name,

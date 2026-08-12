@@ -6,13 +6,8 @@ import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 type Employee = { id: string; employee_no: string; name: string };
 type Item = { id: string; item_code: string; item_name: string; size: string | null };
 
-function localDateTime(offsetMinutes: number) {
-  const date = new Date(Date.now() + offsetMinutes * 60_000);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function asIso(value: string) { return new Date(`${value}:00+08:00`).toISOString(); }
+function taipeiDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()); }
 
 export default function SeasonalCampaignPanel() {
   const client = getSupabaseBrowserClient();
@@ -23,7 +18,7 @@ export default function SeasonalCampaignPanel() {
   const [campaignNo, setCampaignNo] = useState("");
   const [name, setName] = useState("");
   const [season, setSeason] = useState("2026 秋冬");
-  const [windowStart, setWindowStart] = useState(new Date().toISOString().slice(0, 10));
+  const [windowStart, setWindowStart] = useState(() => taipeiDate());
   const [windowEnd, setWindowEnd] = useState("2026-08-19");
   const [opensAt, setOpensAt] = useState("2026-08-12T09:00");
   const [closesAt, setClosesAt] = useState("2026-08-19T18:00");
@@ -32,6 +27,11 @@ export default function SeasonalCampaignPanel() {
   const [busy, setBusy] = useState(false);
   const [scopeReady, setScopeReady] = useState(false);
   const operationRef = useRef<{ createKey: string; scopeKey: string; openKey: string; campaignId?: string } | null>(null);
+
+  function resetScopeKey() {
+    if (operationRef.current) operationRef.current = { ...operationRef.current, scopeKey: crypto.randomUUID() };
+    setScopeReady(false);
+  }
 
   useEffect(() => {
     if (!client) return;
@@ -74,7 +74,7 @@ export default function SeasonalCampaignPanel() {
       p_campaign_id: id, p_employee_ids: employeeIds, p_item_ids: itemIds,
       p_idempotency_key: `SCOPE-SEASONAL-${operation.scopeKey}`, p_request_fingerprint: fingerprint,
     });
-    if (scopeResult.error) { setCampaignId(id); setStatus(`活動已建立，但範圍設定失敗：${scopeResult.error.message}；表單已鎖定，再次按下可沿用同一冪等鍵重試。`); setBusy(false); return; }
+    if (scopeResult.error) { setCampaignId(id); setStatus(`活動已建立，但範圍設定失敗：${scopeResult.error.message}；可修正範圍後重試。`); setBusy(false); return; }
     setCampaignId(id);
     setScopeReady(true);
     setStatus(`活動 ${campaignResult.data?.campaign_no ?? ""} 已建立並完成員工/品號範圍設定；目前仍是 DRAFT。`);
@@ -109,8 +109,8 @@ export default function SeasonalCampaignPanel() {
       <label className="field"><span>截止時間</span><input type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} disabled={busy || Boolean(campaignId)} /></label>
     </div>
     <div className="form-grid">
-      <label className="field"><span>活動員工範圍（可複選）</span><select multiple size={7} value={employeeIds} onChange={(event) => setEmployeeIds(Array.from(event.target.selectedOptions, (option) => option.value))} disabled={busy || Boolean(campaignId)}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no}｜{employee.name}</option>)}</select></label>
-      <label className="field"><span>活動品號範圍（可複選）</span><select multiple size={7} value={itemIds} onChange={(event) => setItemIds(Array.from(event.target.selectedOptions, (option) => option.value))} disabled={busy || Boolean(campaignId)}>{items.map((item) => <option key={item.id} value={item.id}>{item.item_code}｜{item.item_name}{item.size ? `｜${item.size}` : ""}</option>)}</select></label>
+      <label className="field"><span>活動員工範圍（可複選）</span><select multiple size={7} value={employeeIds} onChange={(event) => { resetScopeKey(); setEmployeeIds(Array.from(event.target.selectedOptions, (option) => option.value)); }} disabled={busy || scopeReady}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no}｜{employee.name}</option>)}</select></label>
+      <label className="field"><span>活動品號範圍（可複選）</span><select multiple size={7} value={itemIds} onChange={(event) => { resetScopeKey(); setItemIds(Array.from(event.target.selectedOptions, (option) => option.value)); }} disabled={busy || scopeReady}>{items.map((item) => <option key={item.id} value={item.id}>{item.item_code}｜{item.item_name}{item.size ? `｜${item.size}` : ""}</option>)}</select></label>
     </div>
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void createCampaign()} disabled={busy || scopeReady}>{busy ? "處理中…" : campaignId ? "重試設定範圍" : "建立並凍結範圍"}</button><button className="secondary-button" type="button" onClick={() => void openCampaign()} disabled={busy || !scopeReady}>開放需求窗口</button></div>
     {status ? <p className={status.includes("已") || status.includes("開放") ? "success-note" : "auth-message"} role="status">{status}</p> : null}
