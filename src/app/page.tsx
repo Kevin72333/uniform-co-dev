@@ -11,6 +11,7 @@ import SeasonalApprovalPanel from "./SeasonalApprovalPanel";
 import SeasonalProcurementPanel from "./SeasonalProcurementPanel";
 import ProcurementReasonCodePanel from "./ProcurementReasonCodePanel";
 import PurchaseReceiptPanel from "./PurchaseReceiptPanel";
+import PurchaseReceiptCorrectionPanel from "./PurchaseReceiptCorrectionPanel";
 import StocktakePanel from "./StocktakePanel";
 import ReturnPanel from "./ReturnPanel";
 import PdfArtifactPanel from "./PdfArtifactPanel";
@@ -45,6 +46,7 @@ export default function Home() {
       <SeasonalProcurementPanel />
       <ProcurementReasonCodePanel />
       <PurchaseReceiptPanel />
+      <PurchaseReceiptCorrectionPanel />
       <StocktakePanel />
       <ReturnPanel />
       <PdfArtifactPanel />

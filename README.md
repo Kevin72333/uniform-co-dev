@@ -50,3 +50,5 @@ Durable import worker 的 forward migration 順序為 `0045` → `0046` → `004
 可立即依[實作路線圖](./docs/implementation/roadmap.md)開始第 0 階段蒐集與技術驗證。鼎新樣本阻擋第 4 階段驗收；主檔與期初樣本阻擋第 5 階段切換；列印樣式、帳號清單、備份還原與三年容量 gate 則分別阻擋文件、使用者及正式上線驗收。
 
 Durable import worker 的 forward migrations 為 `0045`–`0048`：reference snapshot、bounded chunks、worker/uploader actor separation，以及 malformed-upload failure 都已納入；實際 Supabase/RLS/Storage smoke 仍需受保護 staging worker 執行。
+
+`0049_receipt_correction_reconciliation.sql` 是採購入庫更正的 forward fix：更正 POST 會以本次 delta 過帳、在鎖內重算有效數量與採購配置，必要時將不足預留轉為衝突並記錄 PO 重開原因；更正狀態查詢 RPC 支援瀏覽器回應遺失後恢復。實際 Supabase 交易／鎖序仍需 staging smoke 驗證。
