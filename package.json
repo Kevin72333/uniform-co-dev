@@ -12,6 +12,7 @@
     "test": "vitest run",
     "renderer:pdf": "node scripts/renderer/renderer-worker.mjs --kind=PDF",
     "renderer:erp": "node scripts/renderer/renderer-worker.mjs --kind=ERP",
+    "renderer:erp:demo": "node scripts/renderer/adapters/uniform-erp-sales-v0.mjs",
     "renderer:storage-proxy": "node scripts/renderer/storage-proxy.mjs",
     "import:worker": "tsx scripts/import/import-worker.ts"
   },

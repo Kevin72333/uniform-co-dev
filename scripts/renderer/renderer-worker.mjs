@@ -14,6 +14,7 @@ const dbUrl = process.env.DATABASE_URL;
 const storageProxyUrl = process.env.RENDER_STORAGE_PROXY_URL;
 const storageProxyToken = process.env.RENDER_STORAGE_PROXY_TOKEN;
 const command = process.env.RENDER_COMMAND;
+let commandArgs = [];
 const leaseSeconds = Number(process.env.RENDER_LEASE_SECONDS ?? 300);
 
 if (!dbUrl || !storageProxyUrl || !storageProxyToken || !command) {
@@ -21,6 +22,15 @@ if (!dbUrl || !storageProxyUrl || !storageProxyToken || !command) {
 }
 if (!/^https?:\/\//i.test(storageProxyUrl)) throw new Error("RENDER_STORAGE_PROXY_URL must be an HTTP(S) URL");
 if (!Number.isInteger(leaseSeconds) || leaseSeconds < 30 || leaseSeconds > 900) throw new Error("RENDER_LEASE_SECONDS must be 30..900");
+if (process.env.RENDER_COMMAND_ARGS) {
+  try {
+    const parsed = JSON.parse(process.env.RENDER_COMMAND_ARGS);
+    if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string")) throw new Error("must be a JSON string array");
+    commandArgs = parsed;
+  } catch (error) {
+    throw new Error(`RENDER_COMMAND_ARGS must be a JSON string array: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 const client = new Client({ connectionString: dbUrl, application_name: `uniform-${kind.toLowerCase()}-renderer` });
 await client.connect();
@@ -50,7 +60,7 @@ try {
     void client.query(`select * from public.${heartbeatFn}($1,$2,$3,$4)`, [attempt.id, attempt.lease_token, attempt.lease_generation, leaseSeconds]).catch(() => process.exitCode = 1);
   }, Math.floor(leaseSeconds * 500));
   const adapterEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(DATABASE_URL|SUPABASE_|RENDER_|BACKUP_|GITHUB_|VERCEL_|TOKEN|SECRET|PASSWORD|API_KEY)/i.test(name)));
-  await execFileAsync(command, ["--attempt-id", attempt.id, "--payload", payloadPath, "--output", outputPath], { env: adapterEnv, maxBuffer: 1024 * 1024 });
+  await execFileAsync(command, [...commandArgs, "--attempt-id", attempt.id, "--payload", payloadPath, "--output", outputPath], { env: adapterEnv, maxBuffer: 1024 * 1024 });
   const bytes = await readFile(outputPath);
   const info = await stat(outputPath);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
