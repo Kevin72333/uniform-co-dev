@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
+
+const url = process.env.SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const root = resolve(process.env.BACKUP_ROOT ?? "");
+const runId = process.env.BACKUP_RUN_ID;
+const buckets = (process.env.BACKUP_STORAGE_BUCKETS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform-render-temp"]);
+if (!url || !serviceKey || !process.env.BACKUP_ROOT || !runId || buckets.length === 0) {
+  throw new Error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUP_ROOT, BACKUP_RUN_ID and BACKUP_STORAGE_BUCKETS are required");
+}
+if (buckets.some((bucket) => !allowedBuckets.has(bucket)) || new Set(buckets).size !== buckets.length) {
+  throw new Error(`BACKUP_STORAGE_BUCKETS must be a unique subset of: ${[...allowedBuckets].join(", ")}`);
+}
+const runDir = resolve(root, runId);
+const storageRoot = resolve(runDir, "storage");
+if (!storageRoot.startsWith(runDir + "\\") && !storageRoot.startsWith(runDir + "/")) throw new Error("Invalid backup path");
+const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
+const objects = [];
+
+async function api(path, options = {}) {
+  const response = await fetch(`${url.replace(/\/$/, "")}${path}`, { ...options, headers: { ...headers, ...(options.headers ?? {}) } });
+  if (!response.ok) throw new Error(`Storage API failed (${response.status})`);
+  return response;
+}
+for (const bucket of buckets) {
+  const bucketResponse = await api(`/storage/v1/bucket/${encodeURIComponent(bucket)}`);
+  const bucketInfo = await bucketResponse.json();
+  if (bucketInfo?.public === true) throw new Error(`Storage bucket must be private: ${bucket}`);
+  const prefixes = [""];
+  for (let prefixIndex = 0; prefixIndex < prefixes.length; prefixIndex += 1) {
+    const prefix = prefixes[prefixIndex];
+    for (let offset = 0; ; offset += 1000) {
+    const response = await api(`/storage/v1/object/list/${encodeURIComponent(bucket)}`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prefix, limit: 1000, offset, sortBy: { column: "name", order: "asc" } }),
+    });
+    const listed = await response.json();
+    if (!Array.isArray(listed) || listed.length === 0) break;
+    for (const entry of listed) {
+      if (!entry?.name || entry.name.includes("..") || entry.name.startsWith("/")) throw new Error("Unsafe Storage object name");
+      const name = String(entry.name);
+      if (entry.id === null) {
+        const childPrefix = `${prefix}${name}/`;
+        if (!prefixes.includes(childPrefix)) prefixes.push(childPrefix);
+        continue;
+      }
+      const objectPath = resolve(storageRoot, bucket, name);
+      if (!objectPath.startsWith(resolve(storageRoot, bucket) + "\\") && !objectPath.startsWith(resolve(storageRoot, bucket) + "/")) throw new Error("Storage path escaped backup root");
+      const bytes = new Uint8Array(await (await api(`/storage/v1/object/${encodeURIComponent(bucket)}/${name.split("/").map(encodeURIComponent).join("/")}`)).arrayBuffer());
+      await mkdir(dirname(objectPath), { recursive: true });
+      await writeFile(objectPath, bytes, { flag: "wx", mode: 0o600 });
+      objects.push({ bucket, name, bytes: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex"), metadata: entry.metadata ?? null, path: relative(runDir, objectPath).replaceAll("\\", "/") });
+    }
+    if (listed.length < 1000) break;
+  }
+  }
+}
+await writeFile(join(runDir, "storage-manifest.json"), `${JSON.stringify({ schema: "uniform-co-storage-manifest-v1", generatedAt: new Date().toISOString(), buckets, objects }, null, 2)}\n`, { mode: 0o600 });
+console.log(`storage_objects=${objects.length}`);
