@@ -31,7 +31,9 @@ Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `cr
 
 `0036_account_role_scope_admin.sql` 套用後，先由受保護維運程序在 Supabase Auth 邀請使用者，再以 SYSTEM_ADMIN 面板把已存在的 Auth UUID 綁定成 `app_accounts`；面板可維護六角色、需求窗口的機構／部門範圍、帳號停用，以及帶理由的 Auth 綁定重設或解除。首次 SYSTEM_ADMIN 必須由 DB owner 依公司核准名單 seed `app_accounts` 與 `user_roles`（不使用 service role 給瀏覽器）；之後全部異動使用受保護 RPC，並寫入 operation command、綁定歷史與 audit event。角色與 scope 變更共用鎖，停用最後一位 SYSTEM_ADMIN 會 fail closed。帳號管理面板不會替 Supabase Auth 發邀請，也不會暴露 service-role key。
 
-`0037_durable_import_storage.sql` 套用後，先在 Supabase Storage 建立／確認 private `uniform-imports` bucket，再由登入使用者在「耐久匯入」面板建立 `AWAITING_UPLOAD` batch 並直傳資料庫核發的不可覆寫 key。Storage policy 只允許該批次建立者在期限內 INSERT 同一 key，禁止 authenticated UPDATE／DELETE；worker 仍須以受控同名 `job_import_worker` 連線核對 object metadata／SHA-256、解析 chunk、填入逐列差異，使用者再呼叫 `confirm_import_batch` 後才 APPLY。`0037` 的 filename/MIME check 以 `NOT VALID` 方式向前相容；若舊批次存在不匹配資料，必須由受控維運程序先逐筆封存／取消，再執行 `VALIDATE CONSTRAINT`，不要在 migration owner session 直接改動 append-only 匯入資料。`0038_durable_import_recovery.sql` 提供重開頁面後以原匯入冪等鍵查回批次，並禁止同一上傳 key 跨匯入類型重用。`0040_renderer_storage_key_fence.sql` 會把 PDF／ERP renderer role 的 Storage 讀寫限制到該 worker 目前持有、且尚未逾期的 attempt-reserved key；套用後請以兩個受控 worker connection 各做一次「claim → upload reserved key → finalize」，並確認不能讀寫另一個 attempt 的 key。未配置 worker 時，畫面會明確停在等待確認，不會假稱匯入完成。
+`0037_durable_import_storage.sql` 套用後，先在 Supabase Storage 建立／確認 private `uniform-imports` bucket，再由登入使用者在「耐久匯入」面板建立 `AWAITING_UPLOAD` batch 並直傳資料庫核發的不可覆寫 key。Storage policy 只允許該批次建立者在期限內 INSERT 同一 key，禁止 authenticated UPDATE／DELETE；worker 仍須以受控同名 `job_import_worker` 連線核對 object metadata／SHA-256、解析 chunk、填入逐列差異，使用者再呼叫 `confirm_import_batch` 後才 APPLY。`0037` 的 filename/MIME check 以 `NOT VALID` 方式向前相容；若舊批次存在不匹配資料，必須由受控維運程序先逐筆封存／取消，再執行 `VALIDATE CONSTRAINT`，不要在 migration owner session 直接改動 append-only 匯入資料。`0038_durable_import_recovery.sql` 提供重開頁面後以原匯入冪等鍵查回批次，並禁止同一上傳 key 跨匯入類型重用。`0040_renderer_storage_key_fence.sql` 與 `0041_renderer_download_and_generation_fence.sql` 會把 PDF／ERP renderer role 的 Storage 讀寫限制到該 worker 目前持有、且尚未逾期的 generation-specific attempt key；資料庫 role 不再直接 INSERT／SELECT `storage.objects`，實際物件上傳必須由受保護的 renderer Storage client 完成。下載則先由 audited download RPC 建立兩分鐘 grant，再由瀏覽器建立短效 signed URL；不要直接對 READY key 建 signed URL。套用後請以兩個受控 worker connection 各做一次「claim → upload reserved generation key → finalize」並測試舊 generation key 被拒，另以兩個登入角色測試 download grant 與 ERP download event。未配置 worker 時，畫面會明確停在等待確認，不會假稱匯入完成。
+
+`0041_renderer_download_and_generation_fence.sql` 另建立 generation-specific object key、撤銷 renderer role 對 `storage.objects` 的直接 DML，並由 `scripts/renderer/storage-proxy.mjs` 以 `job_renderer_storage_proxy` 受控 proxy 代為操作 Storage；Storage Admin credential 只存在 loopback/private proxy，不能傳給 adapter 或瀏覽器。
 
 部署綁定範例（值由 secret manager／受控維運程序注入，不要提交）：
 
@@ -41,6 +43,7 @@ alter role job_storage_cleanup login password '<secret-managed-password>';
 insert into private.job_actor_bindings (db_role, account_id)
 values
   ('job_import_worker', '<dedicated-worker-app-account-uuid>'),
+  ('job_renderer_storage_proxy', '<dedicated-renderer-proxy-app-account-uuid>'),
   ('job_storage_cleanup', '<dedicated-worker-app-account-uuid>')
 on conflict (db_role) do update
 set account_id = excluded.account_id, is_active = true;
@@ -48,11 +51,13 @@ set account_id = excluded.account_id, is_active = true;
 
 兩個 worker 必須使用同名連線 role，且各自的 DB／Storage secret 僅存在受保護 job；若不啟用 worker，保持 `NOLOGIN`，相關 RPC 會 fail closed。啟用時請限制該 role 的 `CONNECT`／網路來源與 Supabase Storage bucket 範圍，並在工作完成後依維運政策撤回 LOGIN。
 
-PDF／ERP renderer runner 已納入 `scripts/renderer/renderer-worker.mjs`。以同名受控 role 分別執行 `npm run renderer:pdf` 或 `npm run renderer:erp`，並提供 `DATABASE_URL`、`SUPABASE_URL`、`SUPABASE_STORAGE_ADMIN_KEY`、`RENDER_COMMAND`；adapter 必須接受 `--attempt-id`、`--payload`（版本化 immutable DTO）／`--output` 並產生對應 PDF 或 ERP payload。runner 只呼叫 lease-fenced claim／heartbeat／retry／finalize RPC，Storage key 由資料庫 attempt 保留，不能由瀏覽器或 service role 直接寫業務表。此 worker 尚需部署環境注入 secrets、同名 LOGIN 與 `private.job_actor_bindings` 後才會實際產生 READY；未配置時 PREPARING 是預期的 fail-closed 狀態。
+PDF／ERP renderer runner 已納入 `scripts/renderer/renderer-worker.mjs`。以同名受控 role 分別執行 `npm run renderer:pdf` 或 `npm run renderer:erp`，並提供 `DATABASE_URL`、`RENDER_STORAGE_PROXY_URL`、`RENDER_STORAGE_PROXY_TOKEN`、`RENDER_COMMAND`；另以同名受控 `job_renderer_storage_proxy` role 執行 `npm run renderer:storage-proxy`，只有 proxy 持有 `SUPABASE_STORAGE_ADMIN_KEY`。adapter 必須接受 `--attempt-id`、`--payload`（版本化 immutable DTO）／`--output` 並產生對應 PDF 或 ERP payload。runner 只呼叫 lease-fenced claim／heartbeat／retry／finalize RPC，Storage key 由資料庫 attempt 保留，不能由瀏覽器或 service role 直接寫業務表。此 worker 尚需部署環境注入 secrets、同名 LOGIN 與 `private.job_actor_bindings` 後才會實際產生 READY；未配置時 PREPARING 是預期的 fail-closed 狀態。
 
 備份／還原固定入口已納入版本庫：`scripts/backup/export-db.sh` 以 protected `SUPABASE_DB_URL` 匯出 `public`／`private` application dump，`scripts/backup/export-auth.sh` 以 data-only dump 保留 Auth UUID／identities／MFA factors，`scripts/backup/export-storage.mjs` 只處理程式固定 allowlist（`uniform-imports`、`uniform-artifacts`、`uniform-render-temp`、`uniform-pdf`、`uniform-erp`）中的 private objects，並由 `scripts/backup/create-manifest.mjs` 建立 SHA-256 manifest。從零還原使用 `scripts/restore/restore-from-zero.sh`，需要明確 `CONFIRM_RESTORE=YES`、`BACKUP_DECRYPT_COMMAND`（雙人程序在受保護 staging 解密 application/Auth dump）、新目標資料庫及 Storage Admin credentials，最後執行 `scripts/restore/verify.sql`。GitHub Actions 的 `.github/workflows/backup.yml` 目前刻意只能手動執行；必須先在受保護 environment 設定 `BACKUP_ENCRYPT_COMMAND`（加密並刪除兩份明文 dump）、`BACKUP_OFFSITE_COMMAND`、加密金鑰與雙人保管資料，才可考慮排程，不宣稱 AC-38／RPO/RTO 已通過。
 
 ## Vercel
+
+Renderer storage proxy deployment note: `job_renderer_storage_proxy` is a separate NOLOGIN role in migration 0041. If renderer is enabled, the protected deployment must run `ALTER ROLE job_renderer_storage_proxy LOGIN PASSWORD '<secret-managed-password>'` on that exact role and keep the proxy listening on loopback or a private network. The renderer runner receives only the proxy URL/token; the Storage Admin credential is never passed to the adapter or browser.
 
 1. Import `Kevin72333/uniform-co`，Production branch 選 `main`。
 2. Preview 使用 staging Supabase URL/key；Production 使用 production URL/key；不要在 Vercel Project Settings 複用錯環境。

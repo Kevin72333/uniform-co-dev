@@ -12,8 +12,8 @@ const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform
 if (!url || !serviceKey || !process.env.BACKUP_ROOT || !runId || buckets.length === 0) {
   throw new Error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUP_ROOT, BACKUP_RUN_ID and BACKUP_STORAGE_BUCKETS are required");
 }
-if (buckets.some((bucket) => !allowedBuckets.has(bucket)) || new Set(buckets).size !== buckets.length) {
-  throw new Error(`BACKUP_STORAGE_BUCKETS must be a unique subset of: ${[...allowedBuckets].join(", ")}`);
+if (buckets.some((bucket) => !allowedBuckets.has(bucket)) || new Set(buckets).size !== buckets.length || buckets.length !== allowedBuckets.size || [...allowedBuckets].some((bucket) => !buckets.includes(bucket))) {
+  throw new Error(`BACKUP_STORAGE_BUCKETS must contain exactly: ${[...allowedBuckets].join(", ")}`);
 }
 const runDir = resolve(root, runId);
 const storageRoot = resolve(runDir, "storage");

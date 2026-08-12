@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "renderer:pdf": "node scripts/renderer/renderer-worker.mjs --kind=PDF",
-    "renderer:erp": "node scripts/renderer/renderer-worker.mjs --kind=ERP"
+    "renderer:erp": "node scripts/renderer/renderer-worker.mjs --kind=ERP",
+    "renderer:storage-proxy": "node scripts/renderer/storage-proxy.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

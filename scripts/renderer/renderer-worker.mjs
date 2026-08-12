@@ -11,14 +11,15 @@ const { Client } = pg;
 const cliKind = process.argv.find((value) => value.startsWith("--kind="))?.split("=", 2)[1];
 const kind = (cliKind ?? process.env.RENDER_KIND) === "ERP" ? "ERP" : "PDF";
 const dbUrl = process.env.DATABASE_URL;
-const storageUrl = process.env.SUPABASE_URL;
-const storageKey = process.env.SUPABASE_STORAGE_ADMIN_KEY;
+const storageProxyUrl = process.env.RENDER_STORAGE_PROXY_URL;
+const storageProxyToken = process.env.RENDER_STORAGE_PROXY_TOKEN;
 const command = process.env.RENDER_COMMAND;
 const leaseSeconds = Number(process.env.RENDER_LEASE_SECONDS ?? 300);
 
-if (!dbUrl || !storageUrl || !storageKey || !command) {
-  throw new Error("DATABASE_URL, SUPABASE_URL, SUPABASE_STORAGE_ADMIN_KEY and RENDER_COMMAND are required");
+if (!dbUrl || !storageProxyUrl || !storageProxyToken || !command) {
+  throw new Error("DATABASE_URL, RENDER_STORAGE_PROXY_URL, RENDER_STORAGE_PROXY_TOKEN and RENDER_COMMAND are required");
 }
+if (!/^https?:\/\//i.test(storageProxyUrl)) throw new Error("RENDER_STORAGE_PROXY_URL must be an HTTP(S) URL");
 if (!Number.isInteger(leaseSeconds) || leaseSeconds < 30 || leaseSeconds > 900) throw new Error("RENDER_LEASE_SECONDS must be 30..900");
 
 const client = new Client({ connectionString: dbUrl, application_name: `uniform-${kind.toLowerCase()}-renderer` });
@@ -27,8 +28,8 @@ let attempt;
 let timer;
 let workDir;
 async function readStorageInfo(bucket, objectKey) {
-  const response = await fetch(`${storageUrl.replace(/\/$/, "")}/storage/v1/object/info/${bucket}/${objectKey.split("/").map(encodeURIComponent).join("/")}`, {
-    headers: { authorization: `Bearer ${storageKey}`, apikey: storageKey },
+  const response = await fetch(`${storageProxyUrl.replace(/\/$/, "")}/info/${bucket}/${objectKey.split("/").map(encodeURIComponent).join("/")}`, {
+    headers: { authorization: `Bearer ${storageProxyToken}`, "x-attempt-id": attempt.id, "x-lease-token": attempt.lease_token, "x-lease-generation": String(attempt.lease_generation) },
   });
   if (!response.ok) return null;
   return response.json();
@@ -58,9 +59,9 @@ try {
   let upload;
   let uploadError;
   try {
-    upload = await fetch(`${storageUrl.replace(/\/$/, "")}/storage/v1/object/${bucket}/${objectKey.split("/").map(encodeURIComponent).join("/")}`, {
+    upload = await fetch(`${storageProxyUrl.replace(/\/$/, "")}/upload/${bucket}/${objectKey.split("/").map(encodeURIComponent).join("/")}`, {
       method: "POST",
-      headers: { authorization: `Bearer ${storageKey}`, apikey: storageKey, "content-type": kind === "PDF" ? "application/pdf" : "text/plain", "x-upsert": "false", "x-metadata": Buffer.from(JSON.stringify({ sha256, size: String(info.size) })).toString("base64") },
+      headers: { authorization: `Bearer ${storageProxyToken}`, "x-attempt-id": attempt.id, "x-lease-token": attempt.lease_token, "x-lease-generation": String(attempt.lease_generation), "content-type": kind === "PDF" ? "application/pdf" : "text/plain", "x-metadata": Buffer.from(JSON.stringify({ sha256, size: String(info.size) })).toString("base64") },
       body: bytes,
     });
   } catch (error) {

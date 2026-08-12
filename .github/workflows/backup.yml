@@ -42,7 +42,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BACKUP_ROOT: ${{ runner.temp }}/uniform-co-backups
           BACKUP_RUN_ID: ${{ env.BACKUP_RUN_ID }}
-          BACKUP_STORAGE_BUCKETS: ${{ vars.BACKUP_STORAGE_BUCKETS }}
+          BACKUP_STORAGE_BUCKETS: uniform-imports,uniform-artifacts,uniform-render-temp,uniform-pdf,uniform-erp
         run: node scripts/backup/export-storage.mjs
       - name: Build complete generation manifest
         env:

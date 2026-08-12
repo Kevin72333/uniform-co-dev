@@ -43,6 +43,11 @@ type DurableImportRecovery = {
 
 const recoveryStorageKey = "uniform-co:durable-import-recovery";
 
+async function sha256Hex(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 const statusLabels: Record<string, string> = {
   AWAITING_UPLOAD: "等待檔案上傳／worker 確認",
   UPLOADED: "已上傳，等待解析 worker",
@@ -228,8 +233,19 @@ export default function DurableImportPanel() {
       setMessage(`已查回批次 ${nextBatch.batch_no}，目前狀態：${statusLabels[nextBatch.status] ?? nextBatch.status}`);
       setBusy(false); return;
     }
+    let fileHash: string;
+    try {
+      fileHash = await sha256Hex(file);
+    } catch (error) {
+      setMessage(`檔案雜湊計算失敗：${error instanceof Error ? error.message : "未知錯誤"}。請保留同一批次重試。`);
+      setBusy(false);
+      return;
+    }
     const uploadResult = await client.storage.from(nextBatch.storage_bucket).upload(nextBatch.storage_object_key, file, {
-      cacheControl: "3600", contentType: mimeType, upsert: false,
+      cacheControl: "3600",
+      contentType: mimeType,
+      upsert: false,
+      metadata: { mimetype: mimeType, size: String(file.size), sha256: fileHash },
     });
     if (uploadResult.error) {
       setMessage(`檔案上傳結果未知：${uploadResult.error.message}。請保留同一檔案與批次重試，不會另建 batch。`);
