@@ -85,10 +85,12 @@ export default function MasterDataPanel() {
     anchor.download = `${entityType.toLowerCase()}-export.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+    let auditError: { message: string } | null = null;
     if (!Array.isArray(exportPayload) && exportPayload?.batchId) {
-      await client.rpc("record_master_export_download", { p_batch_id: exportPayload.batchId });
+      const auditResult = await client.rpc("record_master_export_download", { p_batch_id: exportPayload.batchId });
+      auditError = auditResult.error;
     }
-    setMessage("匯出完成；下載事件應由後端／稽核流程另行記錄");
+    setMessage(auditError ? `檔案已下載，但下載稽核未完成：${auditError.message}` : "匯出完成，下載事件已記錄");
   }
 
   return (

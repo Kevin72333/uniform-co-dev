@@ -80,9 +80,9 @@ create policy master_import_events_read on public.master_import_events
 create policy master_import_changes_read on public.master_import_changes
   for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
 create policy master_export_batches_read on public.master_export_batches
-  for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
+  for select to authenticated using (private.has_role('HR') or (private.has_role('PROCUREMENT') and entity_type in ('SUPPLIERS', 'SUPPLIER_ITEMS')));
 create policy master_export_events_read on public.master_export_events
-  for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
+  for select to authenticated using (private.has_role('HR') or (private.has_role('PROCUREMENT') and exists (select 1 from public.master_export_batches b where b.id = batch_id and b.entity_type in ('SUPPLIERS', 'SUPPLIER_ITEMS'))));
 revoke all on table public.master_import_batches, public.master_import_rows, public.master_import_events, public.master_import_changes, public.master_export_batches, public.master_export_events from public, anon, authenticated;
 grant select on public.master_import_batches, public.master_import_rows, public.master_import_events, public.master_import_changes, public.master_export_batches, public.master_export_events to authenticated;
 
@@ -234,6 +234,11 @@ begin
       if supplier_code = '' or item_code = '' or (row_value ? 'minimumOrderQuantity' and minimum_order_quantity is null) then error_code := 'EMPTY_REQUIRED'; error_message := '供應商代碼、品號與有效 MOQ 不可空白'; end if;
       if error_code is null and not exists (select 1 from public.suppliers s where s.supplier_code = supplier_code and s.is_active) then error_code := 'SUPPLIER_NOT_FOUND'; error_message := '供應商不存在或已停用'; end if;
       if error_code is null and not exists (select 1 from public.uniform_items i where i.item_code = item_code and i.is_active) then error_code := 'ITEM_NOT_FOUND'; error_message := '制服品號不存在或已停用'; end if;
+    end if;
+    if jsonb_typeof(row_value) <> 'object' then
+      error_code := 'INVALID_ROW'; error_message := '匯入列必須是 JSON 物件';
+    elsif jsonb_object_length(row_value) > 50 or exists (select 1 from jsonb_each_text(row_value) field_value where length(field_value.value) > 1000000) then
+      error_code := 'CELL_LIMIT'; error_message := '匯入列欄位或儲存格超過安全上限';
     end if;
     if error_code is null then
       insert into public.master_import_rows (batch_id, row_number, raw_values, status) values (batch_row.id, row_no, row_value, 'VALIDATED');
@@ -416,6 +421,9 @@ begin
   end if;
   select * into batch_row from public.master_export_batches where id = p_batch_id for update;
   if not found then raise exception 'Master export batch not found'; end if;
+  if not private.has_role('HR') and batch_row.entity_type not in ('SUPPLIERS', 'SUPPLIER_ITEMS') then
+    raise exception using errcode = '42501', message = 'Role cannot record this export download';
+  end if;
   insert into public.master_export_events (batch_id, actor_account_id, event_type) values (batch_row.id, current_account, 'DOWNLOADED');
   update public.master_export_batches set downloaded_at = coalesce(downloaded_at, now()), downloaded_by = coalesce(downloaded_by, current_account) where id = batch_row.id returning * into batch_row;
   return batch_row;
