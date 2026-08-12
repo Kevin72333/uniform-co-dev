@@ -22,8 +22,65 @@ revoke all on table public.procurement_difference_reasons from public, anon, aut
 grant select on table public.procurement_difference_reasons to authenticated;
 create policy procurement_difference_reasons_read on public.procurement_difference_reasons
   for select to authenticated using (
-    is_active and (private.has_role('PROCUREMENT') or private.has_role('HR') or private.has_role('CEO'))
+    private.has_role('SYSTEM_ADMIN') or (is_active and (private.has_role('PROCUREMENT') or private.has_role('HR') or private.has_role('CEO')))
   );
+
+create or replace function public.maintain_procurement_difference_reason(
+  p_code text,
+  p_name text,
+  p_is_active boolean,
+  p_idempotency_key text,
+  p_request_fingerprint text
+)
+returns public.procurement_difference_reasons
+language plpgsql
+security definer
+set search_path = pg_catalog, private
+as $$
+declare
+  current_account uuid;
+  command_row public.operation_commands;
+  reason_row public.procurement_difference_reasons;
+  reason_code text;
+begin
+  current_account := private.current_account_id();
+  if auth.uid() is null or coalesce(auth.jwt() ->> 'role', '') <> 'authenticated'
+     or current_account is null or not private.has_role('SYSTEM_ADMIN') then
+    raise exception using errcode = '42501', message = 'SYSTEM_ADMIN role is required';
+  end if;
+  reason_code := upper(btrim(coalesce(p_code, '')));
+  if reason_code = '' or btrim(coalesce(p_name, '')) = ''
+     or btrim(coalesce(p_idempotency_key, '')) = '' or btrim(coalesce(p_request_fingerprint, '')) = '' then
+    raise exception 'reason code, name, idempotency key and fingerprint are required';
+  end if;
+  insert into public.operation_commands (operation_code, idempotency_key, canonical_request_fingerprint, actor_account_id)
+  values ('MAINTAIN_PROCUREMENT_REASON', p_idempotency_key, p_request_fingerprint, current_account)
+  on conflict (operation_code, idempotency_key) do nothing returning * into command_row;
+  if command_row.id is null then
+    select * into command_row from public.operation_commands
+    where operation_code = 'MAINTAIN_PROCUREMENT_REASON' and idempotency_key = p_idempotency_key for update;
+    if command_row.actor_account_id <> current_account or command_row.canonical_request_fingerprint <> p_request_fingerprint then
+      raise exception using errcode = '40001', message = 'idempotency key conflicts with another request';
+    end if;
+    if command_row.status = 'SUCCEEDED' then
+      select * into reason_row from public.procurement_difference_reasons where code = reason_code;
+      return reason_row;
+    end if;
+    raise exception using errcode = '40001', message = 'reason maintenance is already in progress or failed';
+  end if;
+  insert into public.procurement_difference_reasons (code, name, is_active)
+  values (reason_code, left(btrim(p_name), 120), coalesce(p_is_active, true))
+  on conflict (code) do update set name = excluded.name, is_active = excluded.is_active
+  returning * into reason_row;
+  update public.operation_commands
+  set status = 'SUCCEEDED', result_entity_type = 'procurement_difference_reasons', succeeded_at = now()
+  where id = command_row.id;
+  return reason_row;
+end;
+$$;
+
+revoke all on function public.maintain_procurement_difference_reason(text, text, boolean, text, text) from public, anon;
+grant execute on function public.maintain_procurement_difference_reason(text, text, boolean, text, text) to authenticated;
 
 create or replace function public.set_seasonal_procurement_line(
   p_approval_line_id uuid,
