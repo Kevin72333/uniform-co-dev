@@ -2,6 +2,7 @@ import InventoryCalculator from "./InventoryCalculator";
 import HrRequestWorkbench from "./HrRequestWorkbench";
 import AuthPanel from "./AuthPanel";
 import EmployeeImportPanel from "./EmployeeImportPanel";
+import MasterDataPanel from "./MasterDataPanel";
 
 export default function Home() {
   return (
@@ -20,6 +21,7 @@ export default function Home() {
       <InventoryCalculator />
       <HrRequestWorkbench />
       <EmployeeImportPanel />
+      <MasterDataPanel />
     </main>
   );
 }

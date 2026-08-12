@@ -36,6 +36,8 @@ h2 { font-size: 24px; letter-spacing: -.03em; margin-bottom: 0; }
 .auth-message { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 8px 0 0; max-width: 680px; }
 .auth-form { align-items: end; display: grid; gap: 12px; grid-template-columns: 1fr 1fr auto; min-width: min(100%, 700px); }
 .import-panel { margin-top: 20px; }
+.master-tools { align-items: end; }
+.button-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .file-picker { align-items: center; background: #f0f5ef; border: 1px dashed var(--green); border-radius: 12px; color: var(--green); cursor: pointer; display: inline-flex; font-weight: 800; margin-top: 18px; padding: 12px 16px; }
 .file-picker input { display: none; }
 .file-name { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
