@@ -18,6 +18,8 @@
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 6. 邀請制帳號與角色 seed 由 Supabase Auth／受保護 SQL 執行；不得把真實員工資料或 key 寫入 repository。
 
+Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `create_hr_request_draft` 建立完整快照草稿，再呼叫 `submit_hr_request`；倉庫可用 `create_warehouse_shipment_draft` 建立待 POST 發貨草稿。若 migration 尚未套用，畫面會保留預覽模式並顯示 RPC 錯誤，不會假稱已送出。
+
 本機目前無 Docker／Postgres，因此 `supabase db lint --local` 只能在具備 Docker 的維運環境執行；本機已通過 app test、lint、typecheck、build，但不把它當成 SQL/RLS 整合驗收。
 
 ## Vercel

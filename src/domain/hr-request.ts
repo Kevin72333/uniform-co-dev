@@ -2,8 +2,10 @@ export type EmployeeSnapshot = {
   employeeId: string;
   employeeNo: string;
   employeeName: string;
+  institutionId?: string;
   institutionCode: string;
   institutionName: string;
+  departmentId?: string;
   departmentCode: string;
   departmentName: string;
 };

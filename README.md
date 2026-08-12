@@ -16,6 +16,8 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 
 ## 文件索引
 
+`0015_draft_creation_rpc.sql` 將人資需求、補庫與倉庫發貨的草稿建立接到受保護、冪等 RPC；人資工作台在 Supabase 環境會載入正式主檔並可建立草稿後送出預留。
+
 - [業務詞彙](./CONTEXT.md)
 - [產品需求規格](./docs/spec/product-requirements.md)
 - [流程與權限](./docs/spec/workflows-and-permissions.md)

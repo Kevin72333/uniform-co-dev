@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   HrRequestValidationError,
   summarizeHrRequest,
@@ -8,6 +8,7 @@ import {
   type IssueLineDraft,
   type UniformItemSnapshot,
 } from "@/src/domain/hr-request";
+import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
 type LineState = {
   lineId: string;
@@ -65,20 +66,95 @@ const initialLines: LineState[] = [
 ];
 
 export default function HrRequestWorkbench() {
+  const client = getSupabaseBrowserClient();
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeSnapshot[]>(employees);
+  const [itemOptions, setItemOptions] = useState<UniformItemSnapshot[]>(items);
   const [lines, setLines] = useState<LineState[]>(initialLines);
   const [increases, setIncreases] = useState<Record<string, number>>({
     "item-m": 0,
     "item-l": 0,
   });
+  const [dataMessage, setDataMessage] = useState("");
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [loadingData, setLoadingData] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!client) return;
+    const supabase = client;
+    let active = true;
+    async function loadOperationalData() {
+      setLoadingData(true);
+      const [employeeResult, institutionResult, departmentResult, itemResult, warehouseResult, balanceResult, reservationResult] = await Promise.all([
+        supabase.from("employees").select("id,employee_no,name,institution_id,department_id").eq("employment_status", "ACTIVE").order("employee_no"),
+        supabase.from("institutions").select("id,code,name"),
+        supabase.from("departments").select("id,institution_id,code,name"),
+        supabase.from("uniform_items").select("id,item_code,item_name,size,unit").eq("is_active", true).order("item_code"),
+        supabase.from("warehouses").select("id,purpose").eq("is_active", true),
+        supabase.from("inventory_balances").select("warehouse_id,item_id,on_hand_quantity"),
+        supabase.from("inventory_reservations").select("item_id,quantity").eq("status", "ACTIVE"),
+      ]);
+      if (!active) return;
+      if (employeeResult.error || institutionResult.error || departmentResult.error || itemResult.error || warehouseResult.error || balanceResult.error || reservationResult.error) {
+        setDataMessage("正式主檔載入失敗，暫以測試資料預覽；請確認角色與 RLS 權限。");
+        setLoadingData(false);
+        return;
+      }
+      const institutionById = new Map((institutionResult.data ?? []).map((row) => [row.id, row]));
+      const departmentById = new Map((departmentResult.data ?? []).map((row) => [row.id, row]));
+      const employeeRows = (employeeResult.data ?? []).flatMap((row) => {
+        const institution = institutionById.get(row.institution_id);
+        const department = departmentById.get(row.department_id);
+        return institution && department ? [{
+          employeeId: row.id,
+          employeeNo: row.employee_no,
+          employeeName: row.name,
+          institutionId: row.institution_id,
+          institutionCode: institution.code,
+          institutionName: institution.name,
+          departmentId: row.department_id,
+          departmentCode: department.code,
+          departmentName: department.name,
+        }] : [];
+      });
+      const hrWarehouse = (warehouseResult.data ?? []).find((row) => row.purpose === "HR");
+      const generalWarehouse = (warehouseResult.data ?? []).find((row) => row.purpose === "GENERAL");
+      const balanceByItem = new Map<string, { hr: number; general: number }>();
+      for (const row of balanceResult.data ?? []) {
+        const current = balanceByItem.get(row.item_id) ?? { hr: 0, general: 0 };
+        if (row.warehouse_id === hrWarehouse?.id) current.hr = Number(row.on_hand_quantity);
+        if (row.warehouse_id === generalWarehouse?.id) current.general = Number(row.on_hand_quantity);
+        balanceByItem.set(row.item_id, current);
+      }
+      const reservedByItem = new Map<string, number>();
+      for (const row of reservationResult.data ?? []) reservedByItem.set(row.item_id, (reservedByItem.get(row.item_id) ?? 0) + Number(row.quantity));
+      const itemRows = (itemResult.data ?? []).map((row) => {
+        const balance = balanceByItem.get(row.id) ?? { hr: 0, general: 0 };
+        return { itemId: row.id, itemCode: row.item_code, itemName: row.item_name, size: row.size ?? "", unit: row.unit, hrOnHand: balance.hr, generalOnHand: balance.general, activeReserved: reservedByItem.get(row.id) ?? 0 };
+      });
+      if (employeeRows.length > 0 && itemRows.length > 0) {
+        setEmployeeOptions(employeeRows);
+        setItemOptions(itemRows);
+        setLines([{ lineId: `line-${Date.now()}`, employeeId: employeeRows[0].employeeId, itemId: itemRows[0].itemId, quantity: 1 }]);
+        setIncreases(Object.fromEntries(itemRows.map((item) => [item.itemId, 0])));
+        setDataMessage(`已載入 ${employeeRows.length} 位在職員工、${itemRows.length} 個啟用品號`);
+      } else {
+        setDataMessage("正式主檔沒有可用的在職員工或制服品號。");
+      }
+      setLoadingData(false);
+    }
+    void loadOperationalData();
+    return () => { active = false; };
+  }, [client]);
 
   const result = useMemo(() => {
     try {
       const issueLines: IssueLineDraft[] = lines.map((line) => ({
         ...line,
-        employee: employees.find((employee) => employee.employeeId === line.employeeId)!,
-        item: items.find((item) => item.itemId === line.itemId)!,
+        employee: employeeOptions.find((employee) => employee.employeeId === line.employeeId)!,
+        item: itemOptions.find((item) => item.itemId === line.itemId)!,
       }));
-      const increaseLines = items.map((item) => ({
+      const increaseLines = itemOptions.map((item) => ({
         item,
         quantity: increases[item.itemId] ?? 0,
       }));
@@ -93,7 +169,7 @@ export default function HrRequestWorkbench() {
           error instanceof HrRequestValidationError ? error.message : "需求單資料無法檢查",
       };
     }
-  }, [increases, lines]);
+  }, [employeeOptions, increases, itemOptions, lines]);
 
   function updateLine(lineId: string, field: keyof Omit<LineState, "lineId">, value: string) {
     setLines((current) =>
@@ -107,14 +183,56 @@ export default function HrRequestWorkbench() {
 
   function addLine() {
     const nextId = `line-${lines.length + 1}-${Date.now()}`;
+    const defaultEmployee = employeeOptions[0];
+    const defaultItem = itemOptions[Math.min(1, itemOptions.length - 1)];
+    if (!defaultEmployee || !defaultItem) return;
     setLines((current) => [
       ...current,
-      { lineId: nextId, employeeId: employees[0].employeeId, itemId: items[1].itemId, quantity: 1 },
+      { lineId: nextId, employeeId: defaultEmployee.employeeId, itemId: defaultItem.itemId, quantity: 1 },
     ]);
   }
 
   function removeLine(lineId: string) {
     setLines((current) => current.filter((line) => line.lineId !== lineId));
+  }
+
+  async function submitRequest() {
+    if (!client) {
+      setSubmitMessage("預覽模式：設定 Supabase env 並登入 HR 帳號後才能建立草稿與送出預留。");
+      return;
+    }
+    if (!result.summary || result.error) {
+      setSubmitMessage("請先修正送出前檢查錯誤。");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitMessage("");
+    const requestKey = crypto.randomUUID();
+    const issuePayload = lines.map((line) => ({ employeeId: line.employeeId, itemId: line.itemId, quantity: line.quantity }));
+    const increasePayload = itemOptions
+      .map((item) => ({ itemId: item.itemId, quantity: increases[item.itemId] ?? 0 }))
+      .filter((line) => line.quantity > 0);
+    const { data: draft, error: draftError } = await client.rpc("create_hr_request_draft", {
+      p_request_no: `HR-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`,
+      p_distribution_date: new Date().toISOString().slice(0, 10),
+      p_note: null,
+      p_issue_lines: issuePayload,
+      p_increase_lines: increasePayload,
+      p_idempotency_key: `CREATE-${requestKey}`,
+      p_request_fingerprint: JSON.stringify({ issuePayload, increasePayload }),
+    });
+    if (draftError || !draft?.id) {
+      setSubmitMessage(draftError?.message ?? "需求草稿建立失敗");
+      setSubmitting(false);
+      return;
+    }
+    const { data: submitted, error: submitError } = await client.rpc("submit_hr_request", {
+      p_request_id: draft.id,
+      p_idempotency_key: `SUBMIT-${requestKey}`,
+      p_request_fingerprint: JSON.stringify({ requestId: draft.id, issuePayload, increasePayload }),
+    });
+    setSubmitMessage(submitError ? submitError.message : `已送出 ${submitted?.request_no ?? draft.request_no}，庫存預留已由伺服器重算。`);
+    setSubmitting(false);
   }
 
   return (
@@ -125,7 +243,7 @@ export default function HrRequestWorkbench() {
             <p className="eyebrow">03 / HR REQUEST</p>
             <h2>員工明細與增庫</h2>
           </div>
-          <span className="status-pill">測試資料預覽</span>
+          <span className={`status-pill ${loadingData ? "" : dataMessage ? "success" : ""}`}>{loadingData ? "載入正式資料…" : client ? "Supabase 資料" : "測試資料預覽"}</span>
         </div>
 
         <div className="request-table" role="table" aria-label="發放明細">
@@ -143,7 +261,7 @@ export default function HrRequestWorkbench() {
                   value={line.employeeId}
                   onChange={(event) => updateLine(line.lineId, "employeeId", event.target.value)}
                 >
-                  {employees.map((employee) => (
+                  {employeeOptions.map((employee) => (
                     <option key={employee.employeeId} value={employee.employeeId}>
                       {employee.employeeNo}｜{employee.employeeName}（{employee.institutionCode}/
                       {employee.departmentCode}）
@@ -157,7 +275,7 @@ export default function HrRequestWorkbench() {
                   value={line.itemId}
                   onChange={(event) => updateLine(line.lineId, "itemId", event.target.value)}
                 >
-                  {items.map((item) => (
+                  {itemOptions.map((item) => (
                     <option key={item.itemId} value={item.itemId}>
                       {item.itemCode}｜{item.itemName}（{item.size || "不分尺寸"}）
                     </option>
@@ -184,13 +302,18 @@ export default function HrRequestWorkbench() {
         <button className="secondary-button" type="button" onClick={addLine}>
           ＋新增員工明細
         </button>
+        <button className="primary-button" type="button" onClick={() => void submitRequest()} disabled={submitting || loadingData || Boolean(result.error)}>
+          {submitting ? "送出中…" : "建立草稿並送出"}
+        </button>
+        {dataMessage ? <p className="auth-message" role="status">{dataMessage}</p> : null}
+        {submitMessage ? <p className={submitMessage.includes("已送出") ? "success-note" : "error-box"} role="status">{submitMessage}</p> : null}
 
         <div className="increase-list">
           <div className="subheading">
             <h3>品號彙總增庫量 I</h3>
             <span>尺寸選填；庫存按品號獨立計算</span>
           </div>
-          {items.map((item) => (
+            {itemOptions.map((item) => (
             <label className="increase-row" key={item.itemId}>
               <span>
                 {item.itemCode}｜{item.itemName}（{item.size || "不分尺寸"}）
