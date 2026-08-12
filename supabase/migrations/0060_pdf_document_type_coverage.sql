@@ -38,7 +38,8 @@ begin
        'RETURN_NOTE', 'SEASONAL_APPROVAL', 'PURCHASE_ORDER', 'PURCHASE_RECEIPT'
      )
      or p_document_id is null or btrim(coalesce(p_template_version, '')) = ''
-     or p_source_snapshot_version <= 0 or btrim(coalesce(p_source_snapshot_hash, '')) = ''
+     or p_source_snapshot_version is null or p_source_snapshot_version <= 0
+     or btrim(coalesce(p_source_snapshot_hash, '')) = ''
      or btrim(coalesce(p_idempotency_key, '')) = '' or btrim(coalesce(p_request_fingerprint, '')) = ''
      or p_artifact_kind not in ('FORMAL', 'DRAFT_WATERMARK') then
     raise exception 'PDF artifact fields are invalid';
