@@ -188,15 +188,13 @@ returns public.document_render_attempts language plpgsql security definer set se
 declare r public.document_render_attempts; a public.document_artifact_families; x public.document_artifacts;
 begin
   perform private.require_document_renderer();
-  if p_payload_sha256 is null or p_payload_sha256 !~ '^[0-9a-fA-F]{64}$' or p_payload_size_bytes is null or p_payload_size_bytes <= 0 or p_payload_size_bytes > 20000000 then raise exception 'invalid document payload metadata' using errcode='22023'; end if;
-  if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   for a in select f.* from public.document_artifact_families f where f.active_artifact_id is not null and exists (select 1 from public.document_artifacts da join public.document_render_attempts dt on dt.artifact_id=da.id where da.id=f.active_artifact_id and da.status='PREPARING' and (dt.status='PENDING' or (dt.status='RENDERING' and dt.lease_expires_at<=transaction_timestamp()))) order by f.id for update skip locked loop
     select * into x from public.document_artifacts where id=a.active_artifact_id and status='PREPARING' for update;
     if not found then continue; end if;
     select * into r from public.document_render_attempts where artifact_id=x.id and (status='PENDING' or (status='RENDERING' and lease_expires_at<=transaction_timestamp())) order by attempt_no for update skip locked limit 1;
     if not found then continue; end if;
-    update public.document_render_attempts set status='RENDERING', lease_token=encode(gen_random_bytes(24),'hex'), lease_generation=r.lease_generation+1, lease_expires_at=transaction_timestamp()+make_interval(secs=>p_lease_seconds), started_at=coalesce(started_at,now()), failed_at=null, error_code=null, error_message=null where id=r.id returning * into r;
+    update public.document_render_attempts set status='RENDERING', lease_token=encode(gen_random_bytes(24),'hex'), lease_generation=r.lease_generation+1, lease_expires_at=transaction_timestamp()+make_interval(secs=>p_lease_seconds), temp_object_key=coalesce(r.temp_object_key,'pdf/'||r.id::text), started_at=coalesce(started_at,now()), failed_at=null, error_code=null, error_message=null where id=r.id returning * into r;
     return r;
   end loop;
   return null;
@@ -206,6 +204,7 @@ returns public.document_render_attempts language plpgsql security definer set se
 declare r public.document_render_attempts;
 begin
   perform private.require_document_renderer();
+  if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   update public.document_render_attempts set lease_expires_at=transaction_timestamp()+make_interval(secs=>p_lease_seconds) where id=p_attempt_id and status='RENDERING' and lease_token=p_lease_token and lease_generation=p_lease_generation and lease_expires_at>transaction_timestamp() returning * into r;
   if not found then raise exception 'stale renderer lease' using errcode='40001'; end if;
   return r;
@@ -246,13 +245,14 @@ returns public.document_artifacts language plpgsql security definer set search_p
 declare r public.document_render_attempts; x public.document_artifacts; f public.document_artifact_families; h text; n bigint;
 begin
   perform private.require_document_renderer();
+  if p_payload_sha256 is null or p_payload_sha256 !~ '^[0-9a-fA-F]{64}$' or p_payload_size_bytes is null or p_payload_size_bytes <= 0 or p_payload_size_bytes > 20000000 then raise exception 'invalid document payload metadata' using errcode='22023'; end if;
   select artifact_id into strict x.id from public.document_render_attempts where id=p_attempt_id;
   select family_id into strict x.family_id from public.document_artifacts where id=x.id;
   select * into strict f from public.document_artifact_families where id=x.family_id for update;
   select * into strict x from public.document_artifacts where id=x.id for update;
   select * into strict r from public.document_render_attempts where id=p_attempt_id for update;
   if x.status='READY' and x.winning_attempt_id=r.id and x.storage_object_key=p_temp_object_key and x.payload_sha256=lower(p_payload_sha256) then return x; end if;
-  if f.active_artifact_id is distinct from x.id or x.status<>'PREPARING' or r.status<>'RENDERING' or r.lease_token<>p_lease_token or r.lease_generation<>p_lease_generation or r.lease_expires_at<=transaction_timestamp() then raise exception 'stale document render attempt' using errcode='40001'; end if;
+  if f.active_artifact_id is distinct from x.id or x.status<>'PREPARING' or r.status<>'RENDERING' or r.temp_object_key is distinct from p_temp_object_key or r.lease_token<>p_lease_token or r.lease_generation<>p_lease_generation or r.lease_expires_at<=transaction_timestamp() then raise exception 'stale document render attempt' using errcode='40001'; end if;
   select lower(coalesce(metadata->>'sha256','')), case when (metadata->>'size') ~ '^[0-9]+$' then (metadata->>'size')::bigint end into h,n from storage.objects where bucket_id='uniform-pdf' and name=p_temp_object_key;
   if not found or h<>lower(p_payload_sha256) or n<>p_payload_size_bytes then raise exception 'document object metadata mismatch' using errcode='P0001'; end if;
   update public.document_artifacts set is_current=false where family_id=x.family_id and is_current;
@@ -269,12 +269,13 @@ begin
   perform private.require_erp_renderer();
   if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
+  if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   for b in select q.* from public.erp_export_batches q where q.active_artifact_id is not null and exists (select 1 from public.erp_export_artifacts ea join public.erp_export_render_attempts et on et.artifact_id=ea.id where ea.id=q.active_artifact_id and ea.status='PREPARING' and (et.status='PENDING' or (et.status='RENDERING' and et.lease_expires_at<=transaction_timestamp()))) order by q.id for update skip locked loop
     select * into x from public.erp_export_artifacts where id=b.active_artifact_id and status='PREPARING' for update;
     if not found then continue; end if;
     select * into r from public.erp_export_render_attempts where artifact_id=x.id and (status='PENDING' or (status='RENDERING' and lease_expires_at<=transaction_timestamp())) order by attempt_no for update skip locked limit 1;
     if not found then continue; end if;
-    update public.erp_export_render_attempts set status='RENDERING', lease_token=encode(gen_random_bytes(24),'hex'), lease_generation=r.lease_generation+1, lease_expires_at=transaction_timestamp()+make_interval(secs=>p_lease_seconds), started_at=coalesce(started_at,now()), failed_at=null, error_code=null, error_message=null where id=r.id returning * into r;
+    update public.erp_export_render_attempts set status='RENDERING', lease_token=encode(gen_random_bytes(24),'hex'), lease_generation=r.lease_generation+1, lease_expires_at=transaction_timestamp()+make_interval(secs=>p_lease_seconds), temp_object_key=coalesce(r.temp_object_key,'erp/'||r.id::text), started_at=coalesce(started_at,now()), failed_at=null, error_code=null, error_message=null where id=r.id returning * into r;
     return r;
   end loop;
   return null;
@@ -284,6 +285,7 @@ returns public.erp_export_render_attempts language plpgsql security definer set 
 declare r public.erp_export_render_attempts;
 begin
   perform private.require_erp_renderer();
+  if p_lease_seconds is null or p_lease_seconds not between 30 and 900 then raise exception 'invalid lease' using errcode='22023'; end if;
   update public.erp_export_render_attempts set lease_expires_at=transaction_timestamp()+make_interval(secs=>p_lease_seconds) where id=p_attempt_id and status='RENDERING' and lease_token=p_lease_token and lease_generation=p_lease_generation and lease_expires_at>transaction_timestamp() returning * into r;
   if not found then raise exception 'stale renderer lease' using errcode='40001'; end if;
   return r;
@@ -331,7 +333,7 @@ begin
   select * into strict x from public.erp_export_artifacts where id=x.id for update;
   select * into strict r from public.erp_export_render_attempts where id=p_attempt_id for update;
   if x.status='READY' and x.winning_attempt_id=r.id and x.storage_object_key=p_temp_object_key and x.payload_sha256=lower(p_payload_sha256) then return x; end if;
-  if b.active_artifact_id is distinct from x.id or x.status<>'PREPARING' or r.status<>'RENDERING' or r.lease_token<>p_lease_token or r.lease_generation<>p_lease_generation or r.lease_expires_at<=transaction_timestamp() then raise exception 'stale ERP render attempt' using errcode='40001'; end if;
+  if b.active_artifact_id is distinct from x.id or x.status<>'PREPARING' or r.status<>'RENDERING' or r.temp_object_key is distinct from p_temp_object_key or r.lease_token<>p_lease_token or r.lease_generation<>p_lease_generation or r.lease_expires_at<=transaction_timestamp() then raise exception 'stale ERP render attempt' using errcode='40001'; end if;
   select lower(coalesce(metadata->>'sha256','')), case when (metadata->>'size') ~ '^[0-9]+$' then (metadata->>'size')::bigint end into h,n from storage.objects where bucket_id='uniform-erp' and name=p_temp_object_key;
   if not found or h<>lower(p_payload_sha256) or n<>p_payload_size_bytes then raise exception 'ERP object metadata mismatch' using errcode='P0001'; end if;
   update public.erp_export_artifacts set is_current=false where batch_id=x.batch_id and is_current;
