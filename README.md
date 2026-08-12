@@ -4,7 +4,7 @@
 
 ## 第一個可執行切片
 
-目前已接上 Next.js／TypeScript 試算介面、員工明細／品號彙總工作台、Supabase 登入面板、員工 CSV 安全預覽與主檔 CSV／JSON 匯入／匯出工作台：
+目前已接上 Next.js／TypeScript 試算介面、員工明細／品號彙總工作台、Supabase 登入面板、員工 CSV 安全預覽與主檔 CSV／JSON 匯入／匯出工作台；HR、需求窗口、CEO、採購與倉庫各自的受保護操作入口也已接到對應 RPC：
 
 - `npm install` 安裝依賴。
 - `npm test` 執行 F/I/R/T/D 庫存規則與人資需求明細彙總測試。
@@ -16,7 +16,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 
 ## 文件索引
 
-`0015_draft_creation_rpc.sql` 將人資需求、補庫與倉庫發貨的草稿建立接到受保護、冪等 RPC；`0016_employee_import_guard.sql` 將員工匯入的大小、欄數與儲存格限制移到資料庫端；`0017_seasonal_scope_guard.sql` 阻擋沒有員工/品號範圍的換季活動開放；`0018_seasonal_snapshot_at_open.sql` 在開放瞬間刷新並凍結員工歸屬快照；`0019_seasonal_demand_rpc.sql` 與 `0020_seasonal_demand_integrity.sql` 讓需求窗口只能透過鎖定活動、使用凍結範圍快照的伺服器 RPC 登記需求，並撤銷 direct DML；`0021_seasonal_hr_correction.sql` 提供 HR 待核修正 RPC 與快照範圍讀取。前端也提供 CEO 待核版本的 revision/hash 核准或退回入口。人資工作台在 Supabase 環境會載入正式主檔並可建立草稿後送出預留，員工 CSV 匯入工作台也可確認後原子套用員工主檔；換季工作台可建立活動並凍結員工/品號範圍、需求窗口可在授權範圍登記數量，再呼叫受保護 RPC 開放需求窗口。
+`0015_draft_creation_rpc.sql` 將人資需求、補庫與倉庫發貨的草稿建立接到受保護、冪等 RPC；`0016_employee_import_guard.sql` 將員工匯入的大小、欄數與儲存格限制移到資料庫端；`0017_seasonal_scope_guard.sql` 阻擋沒有員工/品號範圍的換季活動開放；`0018_seasonal_snapshot_at_open.sql` 在開放瞬間刷新並凍結員工歸屬快照；`0019_seasonal_demand_rpc.sql` 與 `0020_seasonal_demand_integrity.sql` 讓需求窗口只能透過鎖定活動、使用凍結範圍快照的伺服器 RPC 登記需求，並撤銷 direct DML；`0021_seasonal_hr_correction.sql` 提供 HR 待核修正 RPC 與快照範圍讀取。前端也提供 CEO 待核版本的 revision/hash 核准或退回入口，以及採購人員依核准量選供應商、驗證 MOQ、保存不可覆寫的採購決策並建立採購單。人資工作台在 Supabase 環境會載入正式主檔並可建立草稿後送出預留，員工 CSV 匯入工作台也可確認後原子套用員工主檔；換季工作台可建立活動並凍結員工/品號範圍、需求窗口可在授權範圍登記數量，再呼叫受保護 RPC 開放需求窗口。
 
 - [業務詞彙](./CONTEXT.md)
 - [產品需求規格](./docs/spec/product-requirements.md)
