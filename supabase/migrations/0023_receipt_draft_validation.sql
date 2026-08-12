@@ -181,6 +181,7 @@ begin
   select * into po_line_row from public.purchase_order_lines where id = receipt_line_row.purchase_order_line_id for update;
   if po_line_row.item_id <> locked_item_id then raise exception using errcode = '40001', message = 'Receipt item changed while locking; retry'; end if;
   if receipt_line_row.delivered_quantity <= 0 or receipt_line_row.accepted_quantity + receipt_line_row.rejected_quantity <> receipt_line_row.delivered_quantity then raise exception 'Receipt must have a complete quantity classification before POST'; end if;
+  if receipt_line_row.rejected_quantity > 0 and btrim(coalesce(receipt_line_row.rejection_reason, '')) = '' then raise exception 'A rejection reason is required before POST'; end if;
   select coalesce(sum(prl.accepted_quantity), 0) into accepted_to_date from public.purchase_receipt_lines prl join public.purchase_receipts pr on pr.id = prl.receipt_id where pr.purchase_order_id = po_row.id and pr.status = 'POSTED' and prl.purchase_order_line_id = po_line_row.id;
   select coalesce(sum(prl.delivered_quantity), 0) into delivered_to_date from public.purchase_receipt_lines prl join public.purchase_receipts pr on pr.id = prl.receipt_id where pr.purchase_order_id = po_row.id and pr.status = 'POSTED' and prl.purchase_order_line_id = po_line_row.id;
   remaining_to_accept := po_line_row.ordered_quantity - accepted_to_date;
