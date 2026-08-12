@@ -16,6 +16,7 @@ create table public.return_notes (
 create table public.return_lines (
   id uuid primary key default gen_random_uuid(),
   return_note_id uuid not null,
+  line_no integer not null check (line_no > 0),
   original_hr_request_id uuid not null,
   original_issue_line_id uuid not null,
   employee_id uuid not null references public.employees(id),
@@ -28,6 +29,7 @@ create table public.return_lines (
   size_snapshot text,
   unit_snapshot text,
   unique (return_note_id, original_issue_line_id),
+  unique (return_note_id, line_no),
   unique (return_note_id, id),
   foreign key (return_note_id, original_hr_request_id)
     references public.return_notes(id, original_hr_request_id),
