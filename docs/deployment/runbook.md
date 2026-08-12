@@ -22,6 +22,8 @@ Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `cr
 
 `0015_draft_creation_rpc.sql` 也提供 `create_replenishment_draft`；人資可從額外補庫工作台建立不預留庫存的補庫單，再由 `submit_replenishment_request` 送出，倉庫以 `post_replenishment_request` 依總倉現有庫存調庫。`0016_employee_import_guard.sql` 將員工 CSV 匯入改由 `apply_employee_import_checked` 原子套用，資料庫端也會重驗檔案大小、列數、欄數與儲存格長度，重試沿用相同冪等鍵。
 
+換季 migration `0017`–`0021` 依序加入非空活動範圍、OPEN 時員工快照、需求窗口 RPC、RPC-only 寫入、凍結範圍授權，以及 HR_REVIEW 修正與稽核。套用完整 migration 後，需求窗口才能看到活動範圍並登記；HR correction 必須透過 `correct_seasonal_demand_line`，不得直接寫需求明細。
+
 本機目前無 Docker／Postgres，因此 `supabase db lint --local` 只能在具備 Docker 的維運環境執行；本機已通過 app test、lint、typecheck、build，但不把它當成 SQL/RLS 整合驗收。
 
 ## Vercel
