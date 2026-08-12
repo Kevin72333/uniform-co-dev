@@ -140,7 +140,7 @@ async function parsedRows(batch: ImportBatch): Promise<{ bytes: Uint8Array; rows
   return { bytes, rows };
 }
 
-async function confirmUpload(batch: ImportBatch): Promise<void> {
+async function confirmUpload(batch: ImportBatch): Promise<string> {
   const { bytes, rows } = await parsedRows(batch);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const payload = {
@@ -160,6 +160,7 @@ async function confirmUpload(batch: ImportBatch): Promise<void> {
     `IMPORT-CONFIRM-UPLOAD-${batch.id}`,
     fingerprint(payload),
   ]);
+  return sha256;
 }
 
 async function failUpload(batch: ImportBatch, error: unknown): Promise<void> {
@@ -220,11 +221,11 @@ async function processApply(batch: ImportBatch): Promise<void> {
 async function processBatch(batch: ImportBatch): Promise<void> {
   if (batch.status === "AWAITING_UPLOAD") {
     try {
-      await confirmUpload(batch);
+      const confirmedSha256 = await confirmUpload(batch);
       // Continue the same invocation after a successful confirmation. This
       // makes --once a useful single claim cycle while remaining safe when the
       // confirmation response is lost (the next poll sees the durable status).
-      await processChunk({ ...batch, status: "UPLOADED" }, "PARSE");
+      await processChunk({ ...batch, status: "UPLOADED", file_sha256: confirmedSha256 }, "PARSE");
     } catch (error) {
       if (error instanceof ImportParserError) await failUpload(batch, error);
       else throw error;
