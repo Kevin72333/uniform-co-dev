@@ -5,6 +5,7 @@ import EmployeeImportPanel from "./EmployeeImportPanel";
 import MasterDataPanel from "./MasterDataPanel";
 import WarehouseShipmentPanel from "./WarehouseShipmentPanel";
 import ReplenishmentPanel from "./ReplenishmentPanel";
+import SeasonalCampaignPanel from "./SeasonalCampaignPanel";
 
 export default function Home() {
   return (
@@ -25,6 +26,7 @@ export default function Home() {
       <EmployeeImportPanel />
       <MasterDataPanel />
       <ReplenishmentPanel />
+      <SeasonalCampaignPanel />
       <WarehouseShipmentPanel />
     </main>
   );
