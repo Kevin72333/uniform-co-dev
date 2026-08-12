@@ -119,7 +119,7 @@ begin
   end if;
 
   select * into campaign_row from public.seasonal_campaigns where id = p_campaign_id for update;
-  if campaign_row.id is null or campaign_row.status <> 'OPEN' or current_timestamp < campaign_row.opens_at or current_timestamp > campaign_row.closes_at then
+  if campaign_row.id is null or campaign_row.status <> 'OPEN' or current_timestamp < campaign_row.opens_at or current_timestamp >= campaign_row.closes_at then
     raise exception 'Campaign is not open for demand entry';
   end if;
   select ce.employee_id, ce.employee_no_snapshot, ce.employee_name_snapshot,
