@@ -4,7 +4,7 @@
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'job_storage_cleanup') then
-    execute 'create role job_storage_cleanup login noinherit';
+    execute 'create role job_storage_cleanup noinherit nologin';
   end if;
 end;
 $$;
