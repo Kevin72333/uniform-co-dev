@@ -389,9 +389,9 @@ begin
     perform 1 from public.system_cutover_state where id = 1 and status = 'PRE_CUTOVER' for update;
     if not found then raise exception using errcode = '55000', message = 'Opening uploads require PRE_CUTOVER'; end if;
   end if;
-  select coalesce(o.user_metadata ->> 'mimetype', o.metadata ->> 'mimetype', ''),
-         nullif(coalesce(o.user_metadata ->> 'size', o.metadata ->> 'size', ''), '')::bigint,
-         lower(coalesce(o.user_metadata ->> 'sha256', o.metadata ->> 'sha256', ''))
+  select coalesce(nullif(o.user_metadata ->> 'mimetype', ''), nullif(o.metadata ->> 'mimetype', ''), ''),
+         coalesce(nullif(o.user_metadata ->> 'size', ''), nullif(o.metadata ->> 'size', ''), '')::bigint,
+         lower(coalesce(nullif(o.user_metadata ->> 'sha256', ''), nullif(o.metadata ->> 'sha256', ''), ''))
     into object_mime, object_size, object_hash
     from storage.objects o
     where o.bucket_id = batch_row.storage_bucket and o.name = batch_row.storage_object_key
