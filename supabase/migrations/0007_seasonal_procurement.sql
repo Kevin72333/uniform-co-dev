@@ -4,13 +4,36 @@ create table public.seasonal_campaigns (
   id uuid primary key default gen_random_uuid(),
   campaign_no text not null unique check (btrim(campaign_no) <> ''),
   name text not null check (btrim(name) <> ''),
+  season text not null check (btrim(season) <> ''),
   status text not null default 'DRAFT' check (status in ('DRAFT', 'OPEN', 'HR_REVIEW', 'PENDING_APPROVAL', 'APPROVED', 'CLOSED')),
   window_start date not null,
   window_end date not null,
+  opens_at timestamptz not null,
+  closes_at timestamptz not null,
   created_by uuid not null references public.app_accounts(id),
   approved_at timestamptz,
   closed_at timestamptz,
-  check (window_end >= window_start)
+  check (window_end >= window_start),
+  check (closes_at > opens_at)
+);
+
+create table public.seasonal_campaign_employees (
+  campaign_id uuid not null references public.seasonal_campaigns(id),
+  employee_id uuid not null references public.employees(id),
+  employee_no_snapshot text not null,
+  employee_name_snapshot text not null,
+  institution_id_snapshot uuid not null,
+  department_id_snapshot uuid not null,
+  unique (campaign_id, employee_id)
+);
+
+create table public.seasonal_campaign_items (
+  campaign_id uuid not null references public.seasonal_campaigns(id),
+  item_id uuid not null references public.uniform_items(id),
+  item_code_snapshot text not null,
+  item_name_snapshot text not null,
+  unit_snapshot text not null,
+  unique (campaign_id, item_id)
 );
 
 create table public.seasonal_demand_lines (
@@ -192,6 +215,8 @@ create table public.purchase_receipt_lines (
 );
 
 alter table public.seasonal_campaigns enable row level security;
+alter table public.seasonal_campaign_employees enable row level security;
+alter table public.seasonal_campaign_items enable row level security;
 alter table public.seasonal_demand_lines enable row level security;
 alter table public.seasonal_approval_submissions enable row level security;
 alter table public.seasonal_approval_submission_lines enable row level security;
@@ -205,6 +230,21 @@ alter table public.purchase_receipts enable row level security;
 alter table public.purchase_receipt_lines enable row level security;
 
 create policy seasonal_campaigns_read on public.seasonal_campaigns
+  for select to authenticated using (
+    private.has_role('HR') or private.has_role('CEO') or private.has_role('PROCUREMENT')
+    or private.has_role('DEMAND_COORDINATOR')
+  );
+create policy seasonal_campaign_scope_read on public.seasonal_campaign_employees
+  for select to authenticated using (
+    private.has_role('HR') or private.has_role('CEO') or private.has_role('PROCUREMENT')
+    or (private.has_role('DEMAND_COORDINATOR') and exists (
+      select 1 from public.coordinator_scopes cs
+      join public.employees e on e.id = seasonal_campaign_employees.employee_id
+      where cs.account_id = private.current_account_id()
+        and cs.institution_id = e.institution_id and cs.department_id = e.department_id
+    ))
+  );
+create policy seasonal_campaign_items_read on public.seasonal_campaign_items
   for select to authenticated using (
     private.has_role('HR') or private.has_role('CEO') or private.has_role('PROCUREMENT')
     or private.has_role('DEMAND_COORDINATOR')
@@ -226,10 +266,22 @@ create policy seasonal_demand_lines_draft_write on public.seasonal_demand_lines
       join public.employees e on e.id = employee_id
       where cs.account_id = private.current_account_id()
         and cs.institution_id = e.institution_id and cs.department_id = e.department_id
+        and e.employment_status = 'ACTIVE'
+    ) and exists (
+      select 1 from public.seasonal_campaign_employees ce
+      where ce.campaign_id = seasonal_demand_lines.campaign_id
+        and ce.employee_id = seasonal_demand_lines.employee_id
+    ) and exists (
+      select 1 from public.seasonal_campaign_items ci
+      where ci.campaign_id = seasonal_demand_lines.campaign_id
+        and ci.item_id = seasonal_demand_lines.item_id
+    ) and exists (
+      select 1 from public.uniform_items i
+      where i.id = item_id and i.is_active
     ) and exists (
       select 1 from public.seasonal_campaigns sc
       where sc.id = campaign_id and sc.status = 'OPEN'
-        and current_date between sc.window_start and sc.window_end
+        and current_timestamp between sc.opens_at and sc.closes_at
     )
   );
 create policy seasonal_demand_lines_window_update on public.seasonal_demand_lines
@@ -243,7 +295,7 @@ create policy seasonal_demand_lines_window_update on public.seasonal_demand_line
     ) and exists (
       select 1 from public.seasonal_campaigns sc
       where sc.id = seasonal_demand_lines.campaign_id and sc.status = 'OPEN'
-        and current_date between sc.window_start and sc.window_end
+        and current_timestamp between sc.opens_at and sc.closes_at
     )
   )
   with check (
@@ -252,14 +304,36 @@ create policy seasonal_demand_lines_window_update on public.seasonal_demand_line
       join public.employees e on e.id = employee_id
       where cs.account_id = private.current_account_id()
         and cs.institution_id = e.institution_id and cs.department_id = e.department_id
+        and e.employment_status = 'ACTIVE'
+    ) and exists (
+      select 1 from public.seasonal_campaign_employees ce
+      where ce.campaign_id = seasonal_demand_lines.campaign_id
+        and ce.employee_id = seasonal_demand_lines.employee_id
+    ) and exists (
+      select 1 from public.seasonal_campaign_items ci
+      where ci.campaign_id = seasonal_demand_lines.campaign_id
+        and ci.item_id = seasonal_demand_lines.item_id
+    ) and exists (
+      select 1 from public.uniform_items i
+      where i.id = item_id and i.is_active
     ) and exists (
       select 1 from public.seasonal_campaigns sc
       where sc.id = campaign_id and sc.status = 'OPEN'
-        and current_date between sc.window_start and sc.window_end
+        and current_timestamp between sc.opens_at and sc.closes_at
     )
   );
 create policy seasonal_demand_lines_hr_update on public.seasonal_demand_lines
-  for update to authenticated using (private.has_role('HR')) with check (private.has_role('HR'));
+  for update to authenticated using (
+    private.has_role('HR') and exists (
+      select 1 from public.seasonal_campaigns sc
+      where sc.id = seasonal_demand_lines.campaign_id and sc.status = 'HR_REVIEW'
+    )
+  ) with check (
+    private.has_role('HR') and exists (
+      select 1 from public.seasonal_campaigns sc
+      where sc.id = campaign_id and sc.status = 'HR_REVIEW'
+    )
+  );
 
 create policy seasonal_approval_read on public.seasonal_approval_submissions
   for select to authenticated using (private.has_role('HR') or private.has_role('CEO') or private.has_role('PROCUREMENT'));
@@ -282,14 +356,16 @@ create policy purchase_receipts_read on public.purchase_receipts
 create policy purchase_receipt_lines_read on public.purchase_receipt_lines
   for select to authenticated using (private.has_role('HR') or private.has_role('CEO') or private.has_role('PROCUREMENT') or private.has_role('WAREHOUSE'));
 
-revoke all on table public.seasonal_campaigns, public.seasonal_demand_lines,
+revoke all on table public.seasonal_campaigns, public.seasonal_campaign_employees,
+  public.seasonal_campaign_items, public.seasonal_demand_lines,
   public.seasonal_approval_submissions, public.seasonal_approval_submission_lines,
   public.seasonal_approvals, public.seasonal_approval_lines,
   public.seasonal_procurement_lines, public.seasonal_procurement_line_changes,
   public.purchase_orders, public.purchase_order_lines,
   public.purchase_receipts, public.purchase_receipt_lines
   from public, anon, authenticated;
-grant select on public.seasonal_campaigns, public.seasonal_demand_lines,
+grant select on public.seasonal_campaigns, public.seasonal_campaign_employees,
+  public.seasonal_campaign_items, public.seasonal_demand_lines,
   public.seasonal_approval_submissions, public.seasonal_approval_submission_lines,
   public.seasonal_approvals, public.seasonal_approval_lines,
   public.seasonal_procurement_lines, public.seasonal_procurement_line_changes,
