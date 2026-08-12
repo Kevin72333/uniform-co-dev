@@ -12,7 +12,7 @@ function localDateTime(offsetMinutes: number) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function asIso(value: string) { return new Date(value).toISOString(); }
+function asIso(value: string) { return new Date(`${value}:00+08:00`).toISOString(); }
 
 export default function SeasonalCampaignPanel() {
   const client = getSupabaseBrowserClient();
@@ -30,7 +30,8 @@ export default function SeasonalCampaignPanel() {
   const [campaignId, setCampaignId] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const operationRef = useRef<{ createKey: string; scopeKey: string; campaignId?: string } | null>(null);
+  const [scopeReady, setScopeReady] = useState(false);
+  const operationRef = useRef<{ createKey: string; scopeKey: string; openKey: string; campaignId?: string } | null>(null);
 
   useEffect(() => {
     if (!client) return;
@@ -56,7 +57,7 @@ export default function SeasonalCampaignPanel() {
     if (!client) { setStatus("預覽模式：設定 Supabase env 並登入 HR 後才能建立換季活動。"); return; }
     if (!campaignNo.trim() || !name.trim() || employeeIds.length === 0 || itemIds.length === 0) { setStatus("請填活動欄位，並至少選一位員工與一個品號。"); return; }
     setBusy(true); setStatus("");
-    const operation = operationRef.current ?? { createKey: crypto.randomUUID(), scopeKey: crypto.randomUUID() };
+    const operation = operationRef.current ?? { createKey: crypto.randomUUID(), scopeKey: crypto.randomUUID(), openKey: crypto.randomUUID() };
     operationRef.current = operation;
     const fingerprint = JSON.stringify({ campaignNo, name, season, windowStart, windowEnd, opensAt, closesAt, employeeIds, itemIds });
     let id = operation.campaignId;
@@ -73,8 +74,9 @@ export default function SeasonalCampaignPanel() {
       p_campaign_id: id, p_employee_ids: employeeIds, p_item_ids: itemIds,
       p_idempotency_key: `SCOPE-SEASONAL-${operation.scopeKey}`, p_request_fingerprint: fingerprint,
     });
-    if (scopeResult.error) { setStatus(`活動已建立，但範圍設定失敗：${scopeResult.error.message}；再次按下可沿用同一冪等鍵重試。`); setBusy(false); return; }
+    if (scopeResult.error) { setCampaignId(id); setStatus(`活動已建立，但範圍設定失敗：${scopeResult.error.message}；表單已鎖定，再次按下可沿用同一冪等鍵重試。`); setBusy(false); return; }
     setCampaignId(id);
+    setScopeReady(true);
     setStatus(`活動 ${campaignResult.data?.campaign_no ?? ""} 已建立並完成員工/品號範圍設定；目前仍是 DRAFT。`);
     setBusy(false);
   }
@@ -82,8 +84,10 @@ export default function SeasonalCampaignPanel() {
   async function openCampaign() {
     if (!client || !campaignId) return;
     setBusy(true); setStatus("");
+    const operation = operationRef.current ?? { createKey: crypto.randomUUID(), scopeKey: crypto.randomUUID(), openKey: crypto.randomUUID(), campaignId };
+    operationRef.current = operation;
     const { data, error } = await client.rpc("open_seasonal_campaign", {
-      p_campaign_id: campaignId, p_idempotency_key: `OPEN-SEASONAL-${crypto.randomUUID()}`,
+      p_campaign_id: campaignId, p_idempotency_key: `OPEN-SEASONAL-${operation.openKey}`,
       p_request_fingerprint: JSON.stringify({ campaignId }),
     });
     setStatus(error ? `尚未開放：${error.message}` : `換季需求窗口已開放（${data?.status ?? "OPEN"}），各窗口可依範圍填寫需求。`);
@@ -108,7 +112,7 @@ export default function SeasonalCampaignPanel() {
       <label className="field"><span>活動員工範圍（可複選）</span><select multiple size={7} value={employeeIds} onChange={(event) => setEmployeeIds(Array.from(event.target.selectedOptions, (option) => option.value))} disabled={busy || Boolean(campaignId)}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no}｜{employee.name}</option>)}</select></label>
       <label className="field"><span>活動品號範圍（可複選）</span><select multiple size={7} value={itemIds} onChange={(event) => setItemIds(Array.from(event.target.selectedOptions, (option) => option.value))} disabled={busy || Boolean(campaignId)}>{items.map((item) => <option key={item.id} value={item.id}>{item.item_code}｜{item.item_name}{item.size ? `｜${item.size}` : ""}</option>)}</select></label>
     </div>
-    <div className="button-row"><button className="primary-button" type="button" onClick={() => void createCampaign()} disabled={busy || Boolean(campaignId)}>{busy ? "處理中…" : "建立並凍結範圍"}</button><button className="secondary-button" type="button" onClick={() => void openCampaign()} disabled={busy || !campaignId}>開放需求窗口</button></div>
+    <div className="button-row"><button className="primary-button" type="button" onClick={() => void createCampaign()} disabled={busy || scopeReady}>{busy ? "處理中…" : campaignId ? "重試設定範圍" : "建立並凍結範圍"}</button><button className="secondary-button" type="button" onClick={() => void openCampaign()} disabled={busy || !scopeReady}>開放需求窗口</button></div>
     {status ? <p className={status.includes("已") || status.includes("開放") ? "success-note" : "auth-message"} role="status">{status}</p> : null}
   </section>;
 }
