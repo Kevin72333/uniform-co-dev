@@ -18,6 +18,8 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 
 `0015_draft_creation_rpc.sql` 將人資需求、補庫與倉庫發貨的草稿建立接到受保護、冪等 RPC；`0016_employee_import_guard.sql` 將員工匯入的大小、欄數與儲存格限制移到資料庫端；`0017_seasonal_scope_guard.sql` 阻擋沒有員工/品號範圍的換季活動開放；`0018_seasonal_snapshot_at_open.sql` 在開放瞬間刷新並凍結員工歸屬快照；`0019_seasonal_demand_rpc.sql` 與 `0020_seasonal_demand_integrity.sql` 讓需求窗口只能透過鎖定活動、使用凍結範圍快照的伺服器 RPC 登記需求，並撤銷 direct DML；`0021_seasonal_hr_correction.sql` 提供 HR 待核修正 RPC 與快照範圍讀取；`0022_procurement_reason_codes.sql` 加入可維護採購差異原因碼、SYSTEM_ADMIN 維護 RPC、停用供應商防線與採購決策 RPC 的 active supplier 驗證；`0023_receipt_draft_validation.sql` 允許採購入庫草稿先保存未完成分類，並將完整分類與拒收理由檢查放在 POST 交易；`0024_receipt_draft_update.sql` 讓入庫草稿可依固定鎖序修改；`0025_stocktake_draft_rpcs.sql` 將盤點草稿建立／更新改由受保護 RPC 在交易內擷取帳面量與 balance version，前端新增盤點工作台並保留 `STALE_COUNT` 版本 fencing；`0026_return_draft_rpc.sql` 將退回草稿建立改由原始發放明細推導身份與快照，前端新增退回草稿／POST 工作台；`0027_stocktake_conflict_forward.sql` 將兩倉合計預留衝突與需求轉 `INVENTORY_REVIEW_REQUIRED` 的盤點 POST 修正套用到已完成初始 migration 的環境；`0028_stocktake_update_forward.sql` 將盤點更新 RPC 的重盤簽章與確認防線套用到舊環境；`0029_return_schema_forward.sql` 將退回明細的 line_no 與唯一約束補到舊環境。盤點調減會以兩倉合計檢查有效預留，必要時同交易標記需求需重新檢查；前端也提供 CEO 待核版本的 revision/hash 核准或退回入口、採購決策／採購單、採購入庫、庫存盤點、員工制服退回與 A4 PDF artifact 請求／狀態入口；入庫草稿可先暫存，POST 後才把合格量寫入總倉。人資工作台在 Supabase 環境會載入正式主檔並可建立草稿後送出預留，員工 CSV 匯入工作台也可確認後原子套用員工主檔；換季工作台可建立活動並凍結員工/品號範圍、需求窗口可在授權範圍登記數量，再呼叫受保護 RPC 開放需求窗口。
 
+`0030_pdf_erp_provenance_forward.sql` 是已部署環境的 forward migration：PDF request 會鎖定來源並由資料庫推導 snapshot hash/version，區分 `FORMAL`／`DRAFT_WATERMARK`；ERP 在 `GENERATION_FAILED`／`IMPORT_FAILED` 重試時會受控回到 `PREPARING`，且 fingerprint 必須帶 frozen source snapshot。
+
 - [業務詞彙](./CONTEXT.md)
 - [產品需求規格](./docs/spec/product-requirements.md)
 - [流程與權限](./docs/spec/workflows-and-permissions.md)

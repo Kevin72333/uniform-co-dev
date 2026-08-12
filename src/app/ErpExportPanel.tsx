@@ -48,7 +48,7 @@ export default function ErpExportPanel() {
     const { data, error } = await client.rpc("request_erp_artifact", {
       p_batch_id: batch.id, p_format_version: "UNIFORM-ERP-SALES-v0",
       p_idempotency_key: `REQUEST-ERP-ARTIFACT-${key}`,
-      p_request_fingerprint: JSON.stringify({ batchId: batch.id, formatVersion: "UNIFORM-ERP-SALES-v0" }),
+      p_request_fingerprint: JSON.stringify({ batchId: batch.id, formatVersion: "UNIFORM-ERP-SALES-v0", sourceSnapshotVersion: batch.source_snapshot_version, sourceSnapshotHash: batch.source_snapshot_hash }),
     });
     if (error || !data?.id) setMessage(`ERP artifact 結果尚未確認：${error?.message ?? "請使用相同操作重試"}`);
     else { setArtifact(data as Artifact); setArtifactKey(null); setMessage("已建立 ERP artifact revision；正式鼎新欄位仍需以成功匯入樣本完成驗證。"); }

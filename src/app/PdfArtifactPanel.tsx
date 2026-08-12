@@ -6,6 +6,7 @@ import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 type DocumentType = "HR_REQUEST" | "STOCKTAKE" | "RETURN_NOTE";
 type DocumentRow = { id: string; label: string; version: number; hash: string };
 type Artifact = { id: string; status: "PREPARING" | "READY" | "FAILED"; revision: number; template_version: string; storage_object_key: string | null; error_message: string | null };
+type ArtifactKind = "FORMAL" | "DRAFT_WATERMARK";
 
 const labels: Record<DocumentType, string> = { HR_REQUEST: "人資需求單", STOCKTAKE: "盤點單", RETURN_NOTE: "退回單" };
 
@@ -15,6 +16,7 @@ export default function PdfArtifactPanel() {
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [documentId, setDocumentId] = useState("");
   const [artifact, setArtifact] = useState<Artifact | null>(null);
+  const [artifactKind, setArtifactKind] = useState<ArtifactKind>("FORMAL");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const keyRef = useRef<string | null>(null);
@@ -53,7 +55,8 @@ export default function PdfArtifactPanel() {
       p_document_type: documentType, p_document_id: selected.id, p_template_version: "A4-v1",
       p_source_snapshot_version: selected.version, p_source_snapshot_hash: selected.hash,
       p_idempotency_key: `REQUEST-PDF-${key}`,
-      p_request_fingerprint: JSON.stringify({ documentType, documentId: selected.id, version: selected.version, hash: selected.hash }),
+      p_request_fingerprint: JSON.stringify({ documentType, documentId: selected.id, artifactKind, version: selected.version, hash: selected.hash }),
+      p_artifact_kind: artifactKind,
     });
     if (error || !data?.id) setMessage(`PDF 請求結果尚未確認：${error?.message ?? "請使用相同操作重試"}`);
     else { setArtifact(data as Artifact); keyRef.current = null; setMessage("已建立不可變 PDF revision；背景 renderer 完成前狀態會維持 PREPARING。"); }
@@ -70,9 +73,9 @@ export default function PdfArtifactPanel() {
   return <section className="panel import-panel" aria-label="正式單據 PDF">
     <div className="panel-heading"><div><p className="eyebrow">10 / PDF</p><h2>正式單據 PDF</h2></div><span className={`status-pill ${artifact?.status === "READY" ? "success" : ""}`}>{artifact?.status ?? "待請求"}</span></div>
     <p className="auth-message">每次請求都固定來源 snapshot、template version 與 revision；READY 成品不可覆寫。若尚未部署背景 renderer，請保留 PREPARING 並稍後重新整理狀態。</p>
-    <div className="form-grid"><label className="field"><span>單據類型</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value as DocumentType)} disabled={busy || Boolean(artifact)}>{(Object.keys(labels) as DocumentType[]).map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label><label className="field"><span>單據</span><select value={documentId} onChange={(event) => { keyRef.current = null; setDocumentId(event.target.value); }} disabled={busy || Boolean(artifact)}><option value="">請選擇</option>{documents.map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}</select></label></div>
+    <div className="form-grid"><label className="field"><span>單據類型</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value as DocumentType)} disabled={busy || Boolean(artifact)}>{(Object.keys(labels) as DocumentType[]).map((type) => <option key={type} value={type}>{labels[type]}</option>)}</select></label><label className="field"><span>單據</span><select value={documentId} onChange={(event) => { keyRef.current = null; setDocumentId(event.target.value); }} disabled={busy || Boolean(artifact)}><option value="">請選擇</option>{documents.map((row) => <option key={row.id} value={row.id}>{row.label}</option>)}</select></label><label className="field"><span>成品類型</span><select value={artifactKind} onChange={(event) => { keyRef.current = null; setArtifactKind(event.target.value as ArtifactKind); }} disabled={busy || Boolean(artifact)}><option value="FORMAL">正式 PDF</option><option value="DRAFT_WATERMARK">草稿（浮水印）</option></select></label></div>
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void requestPdf()} disabled={busy || Boolean(artifact) || !selected}>{busy ? "請求中…" : "請求 A4 PDF"}</button>{artifact ? <button className="secondary-button" type="button" onClick={() => void refreshArtifact()} disabled={busy}>{busy ? "查詢中…" : "重新查詢狀態"}</button> : null}</div>
-    {artifact ? <p className={artifact.status === "READY" ? "success-note" : "auth-message"}>revision {artifact.revision}／{artifact.status}。{artifact.status === "READY" && artifact.storage_object_key ? `成品位置：${artifact.storage_object_key}` : artifact.status === "FAILED" ? artifact.error_message ?? "renderer 失敗" : "背景 renderer 尚未完成；不會在前端偽造正式成品。"}</p> : null}
+    {artifact ? <p className={artifact.status === "READY" ? "success-note" : "auth-message"}>revision {artifact.revision}／{artifactKind}／{artifact.status}。{artifact.status === "READY" && artifact.storage_object_key ? `成品位置：${artifact.storage_object_key}` : artifact.status === "FAILED" ? artifact.error_message ?? "renderer 失敗" : "背景 renderer 尚未完成；不會在前端偽造正式成品。"}</p> : null}
     {message ? <p className={message.includes("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
   </section>;
 }
