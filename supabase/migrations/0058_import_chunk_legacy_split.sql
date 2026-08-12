@@ -1,7 +1,8 @@
 -- Forward-safe repair for batches created before 0046 installed the
--- after-insert bounded PARSE chunk splitter. The worker invokes this while it
--- already holds the batch lock, so audit/terminal guards see the real worker
--- actor and no migration-owner data rewrite is required.
+-- after-insert bounded PARSE chunk splitter. The worker invokes this function,
+-- which acquires the batch lock before changing anything, so audit/terminal
+-- guards see the real worker actor and no migration-owner data rewrite is
+-- required.
 
 create or replace function public.prepare_import_chunks(
   p_batch_id uuid,
@@ -80,4 +81,3 @@ $$;
 
 revoke all on function public.prepare_import_chunks(uuid, text) from public, anon, authenticated;
 grant execute on function public.prepare_import_chunks(uuid, text) to job_import_worker;
-
