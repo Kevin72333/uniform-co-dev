@@ -41,7 +41,7 @@ on conflict (db_role) do update
 set account_id = excluded.account_id, is_active = true;
 ```
 
-兩個 worker 必須使用同名連線 role，且各自的 DB／Storage secret 僅存在受保護 job；若不啟用 worker，保持 `NOLOGIN`，相關 RPC 會 fail closed。
+兩個 worker 必須使用同名連線 role，且各自的 DB／Storage secret 僅存在受保護 job；若不啟用 worker，保持 `NOLOGIN`，相關 RPC 會 fail closed。啟用時請限制該 role 的 `CONNECT`／網路來源與 Supabase Storage bucket 範圍，並在工作完成後依維運政策撤回 LOGIN。
 
 備份／還原固定入口已納入版本庫：`scripts/backup/export-db.sh` 以 protected `SUPABASE_DB_URL` 匯出 `public`／`private` application dump，`scripts/backup/export-auth.sh` 以 data-only dump 保留 Auth UUID／identities／MFA factors，`scripts/backup/export-storage.mjs` 只處理程式固定 allowlist（`uniform-imports`、`uniform-artifacts`、`uniform-render-temp`）中的 private objects，並由 `scripts/backup/create-manifest.mjs` 建立 SHA-256 manifest。從零還原使用 `scripts/restore/restore-from-zero.sh`，需要明確 `CONFIRM_RESTORE=YES`、`BACKUP_DECRYPT_COMMAND`（雙人程序在受保護 staging 解密 application/Auth dump）、新目標資料庫及 Storage Admin credentials，最後執行 `scripts/restore/verify.sql`。GitHub Actions 的 `.github/workflows/backup.yml` 目前刻意只能手動執行；必須先在受保護 environment 設定 `BACKUP_ENCRYPT_COMMAND`（加密並刪除兩份明文 dump）、`BACKUP_OFFSITE_COMMAND`、加密金鑰與雙人保管資料，才可考慮排程，不宣稱 AC-38／RPO/RTO 已通過。
 
