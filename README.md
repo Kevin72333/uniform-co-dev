@@ -58,3 +58,5 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`：reference sna
 `0051_hr_issue_correction.sql` 補齊 HR_ISSUE 更正：以已 SHIPPED 的原發放明細為唯一來源，保存不可變員工／品號快照，正負差額只透過 HR 倉庫受保護 RPC 過帳；POST 會在共同品號、需求、原明細與兩倉餘額鎖內重算有效發放／退回上限、拒絕突破有效預留與負庫存，並提供狀態查回與 HR 工作台。實際 SQL／RLS／並行交易仍需 staging smoke 驗證。
 
 `0052_correction_source_advisory.sql` 將 HR_ISSUE、RETURN 與 RETURN correction 對同一人資需求的來源更正共用 advisory fence，避免不同品號更正各自持有 item mutex 後互等需求列；staging 必須以同一需求的不同品號並行 POST 驗證可重試且不死結。
+
+`0053_return_reason_codes.sql` 建立可維護的退回原因碼、退回業務日期，撤銷無原因碼的舊建立 RPC，並由 `ReturnPanel` 使用 active reason code 與 Asia/Taipei 業務日期建立新草稿；`LEGACY` 僅供歷史資料相容且停用。
