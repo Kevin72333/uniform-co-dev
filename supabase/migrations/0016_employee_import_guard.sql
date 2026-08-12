@@ -23,6 +23,7 @@ begin
   end if;
   if btrim(coalesce(p_source_filename, '')) = ''
      or length(p_source_filename) > 255
+     or p_rows is null
      or pg_column_size(p_rows) > 10000000
      or jsonb_typeof(p_rows) <> 'array'
      or jsonb_array_length(p_rows) = 0
@@ -30,7 +31,8 @@ begin
     raise exception 'Employee import payload exceeds the supported limits';
   end if;
   for row_value in select value from jsonb_array_elements(p_rows) loop
-    if jsonb_typeof(row_value) <> 'object' or jsonb_object_length(row_value) > 50 then
+    if jsonb_typeof(row_value) <> 'object'
+       or (select count(*) from jsonb_object_keys(row_value)) > 50 then
       raise exception 'Every employee import row must be an object with at most 50 fields';
     end if;
     for field_value in select value from jsonb_each_text(row_value) loop
