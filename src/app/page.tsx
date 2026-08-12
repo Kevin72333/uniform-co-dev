@@ -16,6 +16,7 @@ import ReturnPanel from "./ReturnPanel";
 import PdfArtifactPanel from "./PdfArtifactPanel";
 import ErpExportPanel from "./ErpExportPanel";
 import AccountAdminPanel from "./AccountAdminPanel";
+import DurableImportPanel from "./DurableImportPanel";
 
 export default function Home() {
   return (
@@ -36,6 +37,7 @@ export default function Home() {
       <HrRequestWorkbench />
       <EmployeeImportPanel />
       <MasterDataPanel />
+      <DurableImportPanel />
       <ReplenishmentPanel />
       <SeasonalCampaignPanel />
       <SeasonalDemandPanel />

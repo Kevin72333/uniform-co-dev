@@ -31,6 +31,8 @@ Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `cr
 
 `0036_account_role_scope_admin.sql` 套用後，先由受保護維運程序在 Supabase Auth 邀請使用者，再以 SYSTEM_ADMIN 面板把已存在的 Auth UUID 綁定成 `app_accounts`；面板可維護六角色、需求窗口的機構／部門範圍、帳號停用，以及帶理由的 Auth 綁定重設或解除。首次 SYSTEM_ADMIN 必須由 DB owner 依公司核准名單 seed `app_accounts` 與 `user_roles`（不使用 service role 給瀏覽器）；之後全部異動使用受保護 RPC，並寫入 operation command、綁定歷史與 audit event。角色與 scope 變更共用鎖，停用最後一位 SYSTEM_ADMIN 會 fail closed。帳號管理面板不會替 Supabase Auth 發邀請，也不會暴露 service-role key。
 
+`0037_durable_import_storage.sql` 套用後，先在 Supabase Storage 建立／確認 private `uniform-imports` bucket，再由登入使用者在「耐久匯入」面板建立 `AWAITING_UPLOAD` batch 並直傳資料庫核發的不可覆寫 key。Storage policy 只允許該批次建立者在期限內 INSERT 同一 key，禁止 authenticated UPDATE／DELETE；worker 仍須以受控同名 `job_import_worker` 連線核對 object metadata／SHA-256、解析 chunk、填入逐列差異，使用者再呼叫 `confirm_import_batch` 後才 APPLY。`0037` 的 filename/MIME check 以 `NOT VALID` 方式向前相容；若舊批次存在不匹配資料，必須由受控維運程序先逐筆封存／取消，再執行 `VALIDATE CONSTRAINT`，不要在 migration owner session 直接改動 append-only 匯入資料。`0038_durable_import_recovery.sql` 提供重開頁面後以原匯入冪等鍵查回批次，並禁止同一上傳 key 跨匯入類型重用。未配置 worker 時，畫面會明確停在等待確認，不會假稱匯入完成。
+
 部署綁定範例（值由 secret manager／受控維運程序注入，不要提交）：
 
 ```sql
