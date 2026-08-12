@@ -26,7 +26,22 @@ Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `cr
 
 本機目前無 Docker／Postgres，因此 `supabase db lint --local` 只能在具備 Docker 的維運環境執行；本機已通過 app test、lint、typecheck、build，但不把它當成 SQL/RLS 整合驗收。
 
-`0031_audit_archive_controls.sql` 會把主要業務資料異動寫入 append-only `audit_events`，並建立 archive/lifecycle metadata；封存 finalize 與移除／還原事件只接受預設 `NOLOGIN` 的 `job_storage_cleanup`。`0032_durable_import_foundation.sql` 會建立預設 `NOLOGIN` 的 `job_import_worker` 與固定 `uniform-imports` bucket/key 的 upload batch；`confirm_import_upload` 只有該 job role 可執行，且必須先在 Storage object metadata 寫入並核對 MIME／size／SHA-256。`0033_worker_role_archive_import_forward.sql` 會把已套用舊 migration 的同名 role 強制回到 `NOLOGIN`，並把 durable `import_batches` 接入封存與稽核。部署時須在受保護環境對**同名 role**執行 `ALTER ROLE job_import_worker LOGIN PASSWORD '...'`／`ALTER ROLE job_storage_cleanup LOGIN PASSWORD '...'`（密碼由 secret manager 注入，完成後可再 `NOLOGIN`），只允許對應 worker 使用；不能另建 login role 後期待 `session_user` gate 通過，也不能把 service role 或 worker role 暴露給瀏覽器，任何 job role 的密碼／連線字串不進 repository 或前端。
+`0031_audit_archive_controls.sql` 會把主要業務資料異動寫入 append-only `audit_events`，並建立 archive/lifecycle metadata；封存 finalize 與移除／還原事件只接受預設 `NOLOGIN` 的 `job_storage_cleanup`。`0032_durable_import_foundation.sql` 會建立預設 `NOLOGIN` 的 `job_import_worker` 與固定 `uniform-imports` bucket/key 的 upload batch；`confirm_import_upload` 只有該 job role 可執行，且必須先在 Storage object metadata 寫入並核對 MIME／size／SHA-256。`0033_worker_role_archive_import_forward.sql` 會把已套用舊 migration 的同名 role 強制回到 `NOLOGIN`，並把 durable `import_batches` 接入封存與稽核。`0034_worker_audit_identity.sql` 會要求部署者在受保護的 private schema 綁定 job role 與不可變的 `app_accounts.id`，並由資料庫推導 archive/lifecycle 的 actor 與 canonical fingerprint。部署時須在受保護環境對**同名 role**執行 `ALTER ROLE job_import_worker LOGIN PASSWORD '...'`／`ALTER ROLE job_storage_cleanup LOGIN PASSWORD '...'`（密碼由 secret manager 注入，完成後可再 `NOLOGIN`），再由 DB owner 寫入 `private.job_actor_bindings`；不能另建 login role 後期待 `session_user` gate 通過，也不能把 service role 或 worker role 暴露給瀏覽器，任何 job role 的密碼／連線字串不進 repository 或前端。
+
+部署綁定範例（值由 secret manager／受控維運程序注入，不要提交）：
+
+```sql
+alter role job_import_worker login password '<secret-managed-password>';
+alter role job_storage_cleanup login password '<secret-managed-password>';
+insert into private.job_actor_bindings (db_role, account_id)
+values
+  ('job_import_worker', '<dedicated-worker-app-account-uuid>'),
+  ('job_storage_cleanup', '<dedicated-worker-app-account-uuid>')
+on conflict (db_role) do update
+set account_id = excluded.account_id, is_active = true;
+```
+
+兩個 worker 必須使用同名連線 role，且各自的 DB／Storage secret 僅存在受保護 job；若不啟用 worker，保持 `NOLOGIN`，相關 RPC 會 fail closed。
 
 備份／還原固定入口已納入版本庫：`scripts/backup/export-db.sh` 以 protected `SUPABASE_DB_URL` 匯出 `public`／`private` application dump，`scripts/backup/export-auth.sh` 以 data-only dump 保留 Auth UUID／identities／MFA factors，`scripts/backup/export-storage.mjs` 只處理程式固定 allowlist（`uniform-imports`、`uniform-artifacts`、`uniform-render-temp`）中的 private objects，並由 `scripts/backup/create-manifest.mjs` 建立 SHA-256 manifest。從零還原使用 `scripts/restore/restore-from-zero.sh`，需要明確 `CONFIRM_RESTORE=YES`、`BACKUP_DECRYPT_COMMAND`（雙人程序在受保護 staging 解密 application/Auth dump）、新目標資料庫及 Storage Admin credentials，最後執行 `scripts/restore/verify.sql`。GitHub Actions 的 `.github/workflows/backup.yml` 目前刻意只能手動執行；必須先在受保護 environment 設定 `BACKUP_ENCRYPT_COMMAND`（加密並刪除兩份明文 dump）、`BACKUP_OFFSITE_COMMAND`、加密金鑰與雙人保管資料，才可考慮排程，不宣稱 AC-38／RPO/RTO 已通過。
 
