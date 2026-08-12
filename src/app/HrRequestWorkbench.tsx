@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   HrRequestValidationError,
   summarizeHrRequest,
@@ -84,6 +84,9 @@ export default function HrRequestWorkbench() {
   const [loadingData, setLoadingData] = useState(false);
   const [dataReady, setDataReady] = useState(!client);
   const [submitting, setSubmitting] = useState(false);
+  const [submittedRequestId, setSubmittedRequestId] = useState("");
+  const [hasDraftOperation, setHasDraftOperation] = useState(false);
+  const operationRef = useRef<{ requestKey: string; submitKey: string; draftId?: string } | null>(null);
 
   useEffect(() => {
     if (!client) return;
@@ -220,20 +223,32 @@ export default function HrRequestWorkbench() {
     }
     setSubmitting(true);
     setSubmitMessage("");
-    const requestKey = crypto.randomUUID();
+    const operation = operationRef.current ?? { requestKey: crypto.randomUUID(), submitKey: crypto.randomUUID() };
+    operationRef.current = operation;
+    setHasDraftOperation(Boolean(operation.draftId));
     const issuePayload = lines.map((line) => ({ employeeId: line.employeeId, itemId: line.itemId, quantity: line.quantity }));
     const increasePayload = itemOptions
       .map((item) => ({ itemId: item.itemId, quantity: increases[item.itemId] ?? 0 }))
       .filter((line) => line.quantity > 0);
-    const { data: draft, error: draftError } = await client.rpc("create_hr_request_draft", {
-      p_request_no: `HR-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`,
-      p_distribution_date: distributionDate,
-      p_note: null,
-      p_issue_lines: issuePayload,
-      p_increase_lines: increasePayload,
-      p_idempotency_key: `CREATE-${requestKey}`,
-      p_request_fingerprint: JSON.stringify({ issuePayload, increasePayload }),
-    });
+    let draft = operation.draftId ? { id: operation.draftId, request_no: "" } : null;
+    let draftError: { message: string } | null = null;
+    if (!draft) {
+      const draftResult = await client.rpc("create_hr_request_draft", {
+        p_request_no: `HR-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`,
+        p_distribution_date: distributionDate,
+        p_note: null,
+        p_issue_lines: issuePayload,
+        p_increase_lines: increasePayload,
+        p_idempotency_key: `CREATE-${operation.requestKey}`,
+        p_request_fingerprint: JSON.stringify({ issuePayload, increasePayload, distributionDate }),
+      });
+      draft = draftResult.data;
+      draftError = draftResult.error;
+      if (draft?.id) {
+        operation.draftId = draft.id;
+        setHasDraftOperation(true);
+      }
+    }
     if (draftError || !draft?.id) {
       setSubmitMessage(draftError?.message ?? "需求草稿建立失敗");
       setSubmitting(false);
@@ -241,10 +256,15 @@ export default function HrRequestWorkbench() {
     }
     const { data: submitted, error: submitError } = await client.rpc("submit_hr_request", {
       p_request_id: draft.id,
-      p_idempotency_key: `SUBMIT-${requestKey}`,
+      p_idempotency_key: `SUBMIT-${operation.submitKey}`,
       p_request_fingerprint: JSON.stringify({ requestId: draft.id, issuePayload, increasePayload }),
     });
-    setSubmitMessage(submitError ? submitError.message : `已送出 ${submitted?.request_no ?? draft.request_no}，庫存預留已由伺服器重算。`);
+    if (!submitError && submitted?.id) {
+      setSubmittedRequestId(submitted.id);
+      setSubmitMessage(`已送出 ${submitted.request_no ?? draft.request_no}，庫存預留已由伺服器重算。`);
+    } else {
+      setSubmitMessage(submitError?.message ?? "送出結果未知；再次按下會沿用相同冪等鍵查回結果。");
+    }
     setSubmitting(false);
   }
 
@@ -316,8 +336,8 @@ export default function HrRequestWorkbench() {
         <button className="secondary-button" type="button" onClick={addLine}>
           ＋新增員工明細
         </button>
-        <button className="primary-button" type="button" onClick={() => void submitRequest()} disabled={submitting || loadingData || !dataReady || Boolean(result.error)}>
-          {submitting ? "送出中…" : "建立草稿並送出"}
+        <button className="primary-button" type="button" onClick={() => void submitRequest()} disabled={submitting || loadingData || !dataReady || Boolean(result.error) || Boolean(submittedRequestId)}>
+          {submittedRequestId ? "已送出並預留" : submitting ? "送出中…" : hasDraftOperation ? "重試送出（沿用冪等鍵）" : "建立草稿並送出"}
         </button>
         {dataMessage ? <p className="auth-message" role="status">{dataMessage}</p> : null}
         {submitMessage ? <p className={submitMessage.includes("已送出") ? "success-note" : "error-box"} role="status">{submitMessage}</p> : null}
