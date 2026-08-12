@@ -22,6 +22,8 @@ export default function SeasonalDemandPanel() {
   const [busy, setBusy] = useState(false);
   const operationKeyRef = useRef<string | null>(null);
 
+  function resetOperation() { operationKeyRef.current = null; }
+
   useEffect(() => {
     if (!client) return;
     const supabase = client;
@@ -77,7 +79,7 @@ export default function SeasonalDemandPanel() {
       p_note: note.trim() || null, p_idempotency_key: `DEMAND-${operationKey}`,
       p_request_fingerprint: JSON.stringify({ campaignId, employeeId, itemId, quantity, note: note.trim() }),
     });
-    setMessage(error ? `需求登記失敗：${error.message}` : `已登記 ${employee?.employee_name_snapshot ?? "員工"}／${item?.item_code_snapshot ?? "品號"} ${quantity} ${item?.unit_snapshot ?? ""}。`);
+    setMessage(error ? `需求登記失敗：${error.message}；若修正欄位後重試會使用新的冪等鍵。` : `已登記 ${employee?.employee_name_snapshot ?? "員工"}／${item?.item_code_snapshot ?? "品號"} ${quantity} ${item?.unit_snapshot ?? ""}。`);
     if (!error) setNote("");
     if (!error) operationKeyRef.current = null;
     setBusy(false);
@@ -89,12 +91,12 @@ export default function SeasonalDemandPanel() {
     <div className="panel-heading"><div><p className="eyebrow">09 / DEMAND ENTRY</p><h2>換季需求登記</h2></div><span className="status-pill">窗口填寫</span></div>
     <p className="auth-message">只能登記目前 OPEN 且在授權範圍內的員工與品號；HR 後續修改會留下異動紀錄。</p>
     <div className="form-grid">
-      <label className="field"><span>開放活動</span><select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} disabled={busy}><option value="">請選擇</option>{campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.campaign_no}｜{campaign.name}（截止 {new Date(campaign.closes_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）</option>)}</select></label>
-      <label className="field"><span>員工</span><select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={busy}><option value="">請選擇</option>{employees.map((employee) => <option key={employee.employee_id} value={employee.employee_id}>{employee.employee_no_snapshot}｜{employee.employee_name_snapshot}</option>)}</select></label>
-      <label className="field"><span>制服品號</span><select value={itemId} onChange={(event) => setItemId(event.target.value)} disabled={busy}><option value="">請選擇</option>{items.map((item) => <option key={item.item_id} value={item.item_id}>{item.item_code_snapshot}｜{item.item_name_snapshot}{item.size_snapshot ? `｜${item.size_snapshot}` : ""}</option>)}</select></label>
-      <label className="field"><span>需求數量</span><input type="number" min={0} max={999999999} value={quantity} onChange={(event) => setQuantity(Math.max(0, Number(event.target.value) || 0))} disabled={busy} /></label>
+      <label className="field"><span>開放活動</span><select value={campaignId} onChange={(event) => { resetOperation(); setCampaignId(event.target.value); }} disabled={busy}><option value="">請選擇</option>{campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.campaign_no}｜{campaign.name}（截止 {new Date(campaign.closes_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}）</option>)}</select></label>
+      <label className="field"><span>員工</span><select value={employeeId} onChange={(event) => { resetOperation(); setEmployeeId(event.target.value); }} disabled={busy}><option value="">請選擇</option>{employees.map((employee) => <option key={employee.employee_id} value={employee.employee_id}>{employee.employee_no_snapshot}｜{employee.employee_name_snapshot}</option>)}</select></label>
+      <label className="field"><span>制服品號</span><select value={itemId} onChange={(event) => { resetOperation(); setItemId(event.target.value); }} disabled={busy}><option value="">請選擇</option>{items.map((item) => <option key={item.item_id} value={item.item_id}>{item.item_code_snapshot}｜{item.item_name_snapshot}{item.size_snapshot ? `｜${item.size_snapshot}` : ""}</option>)}</select></label>
+      <label className="field"><span>需求數量</span><input type="number" min={0} max={999999999} value={quantity} onChange={(event) => { resetOperation(); setQuantity(Math.max(0, Number(event.target.value) || 0)); }} disabled={busy} /></label>
     </div>
-    <label className="field"><span>備註（選填）</span><input value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} disabled={busy} placeholder="例如：新進人員／尺寸特殊" /></label>
+    <label className="field"><span>備註（選填）</span><input value={note} onChange={(event) => { resetOperation(); setNote(event.target.value); }} maxLength={2000} disabled={busy} placeholder="例如：新進人員／尺寸特殊" /></label>
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void saveDemand()} disabled={busy || !campaignId || !employeeId || !itemId}>{busy ? "儲存中…" : "儲存需求"}</button></div>
     {message ? <p className={message.startsWith("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
   </section>;
