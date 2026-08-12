@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
 type Employee = { id: string; employee_no: string; name: string };
@@ -30,6 +30,7 @@ export default function SeasonalCampaignPanel() {
   const [campaignId, setCampaignId] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const operationRef = useRef<{ createKey: string; scopeKey: string; campaignId?: string } | null>(null);
 
   useEffect(() => {
     if (!client) return;
@@ -55,22 +56,26 @@ export default function SeasonalCampaignPanel() {
     if (!client) { setStatus("預覽模式：設定 Supabase env 並登入 HR 後才能建立換季活動。"); return; }
     if (!campaignNo.trim() || !name.trim() || employeeIds.length === 0 || itemIds.length === 0) { setStatus("請填活動欄位，並至少選一位員工與一個品號。"); return; }
     setBusy(true); setStatus("");
-    const key = crypto.randomUUID();
+    const operation = operationRef.current ?? { createKey: crypto.randomUUID(), scopeKey: crypto.randomUUID() };
+    operationRef.current = operation;
     const fingerprint = JSON.stringify({ campaignNo, name, season, windowStart, windowEnd, opensAt, closesAt, employeeIds, itemIds });
-    const campaignResult = await client.rpc("create_seasonal_campaign", {
+    let id = operation.campaignId;
+    let campaignResult: { data: { id?: string; campaign_no?: string } | null; error: { message: string } | null } = { data: null, error: null };
+    if (!id) campaignResult = await client.rpc("create_seasonal_campaign", {
       p_campaign_no: campaignNo.trim(), p_name: name.trim(), p_season: season.trim(), p_window_start: windowStart,
       p_window_end: windowEnd, p_opens_at: asIso(opensAt), p_closes_at: asIso(closesAt),
-      p_idempotency_key: `CREATE-SEASONAL-${key}`, p_request_fingerprint: fingerprint,
+      p_idempotency_key: `CREATE-SEASONAL-${operation.createKey}`, p_request_fingerprint: fingerprint,
     });
-    if (campaignResult.error || !campaignResult.data?.id) { setStatus(campaignResult.error?.message ?? "活動建立失敗"); setBusy(false); return; }
-    const id = campaignResult.data.id as string;
+    if (!id) id = campaignResult.data?.id as string | undefined;
+    if (campaignResult.error || !id) { setStatus(campaignResult.error?.message ?? "活動建立失敗"); setBusy(false); return; }
+    operation.campaignId = id;
     const scopeResult = await client.rpc("set_seasonal_campaign_scope", {
       p_campaign_id: id, p_employee_ids: employeeIds, p_item_ids: itemIds,
-      p_idempotency_key: `SCOPE-SEASONAL-${key}`, p_request_fingerprint: fingerprint,
+      p_idempotency_key: `SCOPE-SEASONAL-${operation.scopeKey}`, p_request_fingerprint: fingerprint,
     });
-    if (scopeResult.error) { setCampaignId(id); setStatus(`活動已建立，但範圍設定失敗：${scopeResult.error.message}`); setBusy(false); return; }
+    if (scopeResult.error) { setStatus(`活動已建立，但範圍設定失敗：${scopeResult.error.message}；再次按下可沿用同一冪等鍵重試。`); setBusy(false); return; }
     setCampaignId(id);
-    setStatus(`活動 ${campaignResult.data.campaign_no} 已建立並完成員工/品號範圍設定；目前仍是 DRAFT。`);
+    setStatus(`活動 ${campaignResult.data?.campaign_no ?? ""} 已建立並完成員工/品號範圍設定；目前仍是 DRAFT。`);
     setBusy(false);
   }
 
