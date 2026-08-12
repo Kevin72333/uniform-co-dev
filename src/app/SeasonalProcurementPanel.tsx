@@ -14,6 +14,7 @@ type ApprovalLine = {
 };
 type Supplier = { id: string; supplier_code: string; name: string; default_currency: string | null };
 type SupplierItem = { supplier_id: string; item_id: string; minimum_order_quantity: number | null };
+type DifferenceReason = { code: string; name: string };
 type ProcurementLine = { id: string; approval_line_id: string; supplier_id: string; final_purchase_quantity: number; minimum_order_quantity_snapshot: number | null };
 
 function taipeiToday() {
@@ -25,6 +26,7 @@ export default function SeasonalProcurementPanel() {
   const [lines, setLines] = useState<ApprovalLine[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierItems, setSupplierItems] = useState<SupplierItem[]>([]);
+  const [differenceReasons, setDifferenceReasons] = useState<DifferenceReason[]>([]);
   const [procurementLines, setProcurementLines] = useState<ProcurementLine[]>([]);
   const [lineId, setLineId] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -36,7 +38,7 @@ export default function SeasonalProcurementPanel() {
   const [orderedQuantity, setOrderedQuantity] = useState(0);
   const [orderDate, setOrderDate] = useState(taipeiToday());
   const [expectedArrivalDate, setExpectedArrivalDate] = useState("");
-  const [currency, setCurrency] = useState("TWD");
+  const [currency, setCurrency] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [taxRate, setTaxRate] = useState("");
   const [message, setMessage] = useState("");
@@ -46,8 +48,8 @@ export default function SeasonalProcurementPanel() {
 
   const selectedLine = useMemo(() => lines.find((line) => line.id === lineId), [lines, lineId]);
   const availableSuppliers = useMemo(
-    () => supplierItems.filter((relation) => relation.item_id === selectedLine?.item_id && relation.minimum_order_quantity !== 0),
-    [selectedLine, supplierItems],
+    () => supplierItems.filter((relation) => relation.item_id === selectedLine?.item_id && relation.minimum_order_quantity !== 0 && suppliers.some((supplier) => supplier.id === relation.supplier_id)),
+    [selectedLine, supplierItems, suppliers],
   );
   const selectedRelation = availableSuppliers.find((relation) => relation.supplier_id === supplierId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId);
@@ -58,14 +60,15 @@ export default function SeasonalProcurementPanel() {
     const supabase = client;
     let active = true;
     async function load() {
-      const [approvalResult, supplierResult, relationResult, decisionResult] = await Promise.all([
+      const [approvalResult, supplierResult, relationResult, reasonResult, decisionResult] = await Promise.all([
         supabase.from("seasonal_approval_lines").select("id,item_id,item_code_snapshot,item_name_snapshot,size_snapshot,unit_snapshot,approved_quantity,seasonal_approvals!inner(status)").eq("seasonal_approvals.status", "APPROVED").order("item_code_snapshot"),
         supabase.from("suppliers").select("id,supplier_code,name,default_currency").eq("is_active", true).order("supplier_code"),
         supabase.from("supplier_uniform_items").select("supplier_id,item_id,minimum_order_quantity").eq("is_active", true),
+        supabase.from("procurement_difference_reasons").select("code,name").eq("is_active", true).order("code"),
         supabase.from("seasonal_procurement_lines").select("id,approval_line_id,supplier_id,final_purchase_quantity,minimum_order_quantity_snapshot"),
       ]);
       if (!active) return;
-      if (approvalResult.error || supplierResult.error || relationResult.error || decisionResult.error) {
+      if (approvalResult.error || supplierResult.error || relationResult.error || decisionResult.error || reasonResult.error) {
         setMessage("採購資料載入失敗，請確認 PROCUREMENT 角色與 RLS 權限。");
         return;
       }
@@ -76,6 +79,7 @@ export default function SeasonalProcurementPanel() {
       setLines(nextLines);
       setSuppliers((supplierResult.data ?? []) as Supplier[]);
       setSupplierItems((relationResult.data ?? []) as SupplierItem[]);
+      setDifferenceReasons((reasonResult.data ?? []) as DifferenceReason[]);
       const loadedDecisions = (decisionResult.data ?? []) as ProcurementLine[];
       const loadedRelations = (relationResult.data ?? []) as SupplierItem[];
       setProcurementLines(loadedDecisions);
@@ -84,7 +88,9 @@ export default function SeasonalProcurementPanel() {
         const existing = loadedDecisions.find((row) => row.approval_line_id === first.id);
         const relation = loadedRelations.find((row) => row.item_id === first.item_id && row.minimum_order_quantity !== 0);
         setLineId(first.id);
-        setSupplierId(existing?.supplier_id ?? relation?.supplier_id ?? "");
+        const initialSupplierId = existing?.supplier_id ?? relation?.supplier_id ?? "";
+        setSupplierId(initialSupplierId);
+        setCurrency((supplierResult.data as Supplier[] | null)?.find((row) => row.id === initialSupplierId)?.default_currency ?? "");
         setFinalQuantity(existing?.final_purchase_quantity ?? first.approved_quantity);
         setOrderedQuantity(existing?.final_purchase_quantity ?? first.approved_quantity);
         setProcurementId(existing?.id ?? "");
@@ -104,6 +110,7 @@ export default function SeasonalProcurementPanel() {
     resetDecisionKey();
     setLineId(nextId);
     setSupplierId(existing?.supplier_id ?? relation?.supplier_id ?? "");
+    setCurrency(suppliers.find((supplier) => supplier.id === (existing?.supplier_id ?? relation?.supplier_id))?.default_currency ?? "");
     setFinalQuantity(existing?.final_purchase_quantity ?? nextLine.approved_quantity);
     setOrderedQuantity(existing?.final_purchase_quantity ?? nextLine.approved_quantity);
     setProcurementId(existing?.id ?? "");
@@ -118,7 +125,7 @@ export default function SeasonalProcurementPanel() {
     decisionKeyRef.current = operationKey;
     const { data, error } = await client.rpc("set_seasonal_procurement_line", {
       p_approval_line_id: selectedLine.id, p_supplier_id: supplierId, p_final_purchase_quantity: finalQuantity,
-      p_difference_reason: differenceReason.trim() || null, p_note: note.trim() || null,
+      p_difference_reason: differenceReason || null, p_note: note.trim() || null,
       p_idempotency_key: `PROCUREMENT-DECISION-${operationKey}`,
       p_request_fingerprint: JSON.stringify({ lineId: selectedLine.id, supplierId, finalQuantity, differenceReason: differenceReason.trim(), note: note.trim() }),
     });
@@ -158,7 +165,7 @@ export default function SeasonalProcurementPanel() {
       <label className="field"><span>最終採購量</span><input type="number" min={0} max={999999999} value={finalQuantity} onChange={(event) => { resetDecisionKey(); setFinalQuantity(Math.max(0, Number(event.target.value) || 0)); }} disabled={busy || Boolean(existingDecision)} /></label>
       <div className="metric"><span>核准量／MOQ</span><strong>{selectedLine?.approved_quantity ?? 0}／{selectedRelation?.minimum_order_quantity ?? "—"}</strong><small>{selectedSupplier ? `${selectedSupplier.supplier_code}｜${selectedSupplier.name}` : "請先選擇供應商"}</small></div>
     </div>
-    <label className="field reason-field"><span>差異理由（採購量不同時必填）</span><input value={differenceReason} onChange={(event) => { resetDecisionKey(); setDifferenceReason(event.target.value); }} maxLength={500} disabled={busy || Boolean(existingDecision)} placeholder="例如：符合廠商整箱 MOQ" /></label>
+    <label className="field reason-field"><span>差異原因碼（採購量不同時必填）</span><select value={differenceReason} onChange={(event) => { resetDecisionKey(); setDifferenceReason(event.target.value); }} disabled={busy || Boolean(existingDecision)}><option value="">請選擇原因碼</option>{differenceReasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.code}｜{reason.name}</option>)}</select></label>
     <label className="field reason-field"><span>備註（選填）</span><input value={note} onChange={(event) => { resetDecisionKey(); setNote(event.target.value); }} maxLength={2000} disabled={busy || Boolean(existingDecision)} /></label>
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void saveDecision()} disabled={busy || !selectedLine || !supplierId || Boolean(existingDecision)}>{busy ? "儲存中…" : existingDecision ? "採購決策已保存" : "保存採購決策"}</button></div>
     {existingDecision ? <>
