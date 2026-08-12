@@ -18,15 +18,22 @@ const storageBase = storageUrl.replace(/\/$/, "");
 const authHeaders = { authorization: `Bearer ${storageKey}`, apikey: storageKey };
 
 function parseObjectPath(urlPath) {
-  const match = urlPath.match(/^\/(upload|info)\/([^/]+)\/(.+)$/);
+  const match = urlPath.match(/^\/(upload|info|download)\/([^/]+)\/(.+)$/);
   if (!match) return null;
   const bucket = decodeURIComponent(match[2]);
   const key = match[3].split("/").map(decodeURIComponent).join("/");
-  if (!["uniform-pdf", "uniform-erp"].includes(bucket) || !key || key.includes("..") || key.startsWith("/")) return null;
+  if (!["uniform-pdf", "uniform-erp", "uniform-imports"].includes(bucket) || !key || key.includes("..") || key.startsWith("/")) return null;
   return { operation: match[1], bucket, key };
 }
 
 async function allowed(req, object) {
+  if (object.bucket === "uniform-imports") {
+    if (object.operation !== "download") return false;
+    const batchId = req.headers["x-batch-id"];
+    if (typeof batchId !== "string" || !/^[0-9a-f-]{36}$/i.test(batchId)) return false;
+    const result = await db.query("select private.import_storage_capability($1,$2,$3) as allowed", [batchId, object.bucket, object.key]);
+    return result.rows[0]?.allowed === true;
+  }
   const attemptId = req.headers["x-attempt-id"];
   const leaseToken = req.headers["x-lease-token"];
   const generation = req.headers["x-lease-generation"];
@@ -53,7 +60,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.headers.authorization !== `Bearer ${proxyToken}`) { res.writeHead(401); res.end("unauthorized"); return; }
     const object = parseObjectPath(new URL(req.url ?? "/", "http://localhost").pathname);
-    if (!object || (object.operation === "upload" && req.method !== "POST") || (object.operation === "info" && req.method !== "GET")) { res.writeHead(404); res.end("not found"); return; }
+    if (!object || (object.operation === "upload" && req.method !== "POST") || ((object.operation === "info" || object.operation === "download") && req.method !== "GET")) { res.writeHead(404); res.end("not found"); return; }
     if (!(await allowed(req, object))) { res.writeHead(403); res.end("renderer capability denied"); return; }
     const encodedKey = object.key.split("/").map(encodeURIComponent).join("/");
     const target = `${storageBase}/storage/v1/object/${object.operation === "info" ? "info/" : ""}${object.bucket}/${encodedKey}`;

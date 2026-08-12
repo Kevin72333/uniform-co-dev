@@ -236,7 +236,7 @@ function worksheetRows(xml: string, shared: string[], limit: ImportParserLimits,
     if (values.length > 0) {
       if (rows.length > 0) {
         const identifierColumns = new Set(
-          rows[0].map((header, index) => /^(employee[_-]?no|employeeno|item[_-]?code|itemcode|supplier[_-]?code|suppliercode|institution[_-]?code|institutioncode|department[_-]?code|departmentcode|code)$/i.test(header.trim()) ? index : -1).filter((index) => index >= 0),
+          rows[0].map((header, index) => /^(employee[_-]?no|employeeno|item[_-]?code|itemcode|supplier[_-]?code|suppliercode|institution[_-]?code|institutioncode|department[_-]?code|departmentcode|code|工號|品號|供應商代碼|機構代碼|部門代碼)$/i.test(header.trim()) ? index : -1).filter((index) => index >= 0),
         );
         for (const index of identifierColumns) {
           if (kinds[index] !== "s" && kinds[index] !== "inlineStr") {

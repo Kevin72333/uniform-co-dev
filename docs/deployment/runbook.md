@@ -35,6 +35,8 @@ Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `cr
 
 `0041_renderer_download_and_generation_fence.sql` 另建立 generation-specific object key、撤銷 renderer role 對 `storage.objects` 的直接 DML，並由 `scripts/renderer/storage-proxy.mjs` 以 `job_renderer_storage_proxy` 受控 proxy 代為操作 Storage；Storage Admin credential 只存在 loopback/private proxy，不能傳給 adapter 或瀏覽器。
 
+`0045_import_worker_snapshot_and_storage.sql` 提供 `list_import_work`、`get_import_reference_snapshot` 與 import object read capability。受控 worker 以 `npm run import:worker -- --once`（或移除 `--once` 持續輪詢）讀取同一個 private storage proxy，先用 `src/domain/import-worker-parser.ts` 驗證並解析檔案，再以 `src/domain/import-worker.ts` 依員工工號、制服品號、供應商條件及倉庫／品號鍵產生 INSERT／UPDATE／SKIP／ERROR preview，逐一完成 PARSE／VALIDATE chunk；使用者確認後才取得 batch lease 並呼叫 APPLY。worker 只持有 DB worker connection 與 proxy token，不持有 Storage Admin key；proxy 只允許 exact `uniform-imports` batch key，已確認批次即使 upload TTL 到期仍可讀取，終端批次則拒絕。部署 smoke 必須涵蓋一列更新、一列略過、一列錯誤、逾期 chunk 接手、max-attempt FAILED、response-loss 後同一 batch／object key 重試。
+
 部署綁定範例（值由 secret manager／受控維運程序注入，不要提交）：
 
 ```sql
@@ -89,3 +91,5 @@ Production 執行前要先備份、確認目前 migration version、在 staging 
 - 回應逾時先用同一 idempotency key 查詢 operation command，不直接重做。
 - 發現 migration／RLS 不一致先停止正式 cutover，不刪除正式 ledger 或 READY artifact。
 - 備份／還原與 offsite credentials 尚未配置前，不宣稱 AC-38 或 production RPO/RTO 已通過。
+
+Durable import worker deployment also applies `0046_import_chunk_split_forward.sql`, `0047_import_worker_confirmation_actor.sql`, and `0048_import_upload_failure.sql`; the worker confirms uploads, reuses immutable master snapshots, processes bounded chunks, and durably marks definitive parser failures. Claim keys are generated per lease attempt, while the database worker role and actor binding remain fixed.
