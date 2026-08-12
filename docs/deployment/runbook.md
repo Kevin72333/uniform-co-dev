@@ -101,3 +101,5 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 `0052_correction_source_advisory.sql` 需在 0050、0051 後套用；它以同一 HR request 的 transaction advisory lock 統一不同品號的人資發放／退回更正，staging 應驗證並行交易不形成 item-mutex／需求列死結，失敗者以 40001 重試。
 
 `0053_return_reason_codes.sql` 套用後，先確認 `return_reason_codes` 的正式代碼已由 SYSTEM_ADMIN 維護；退回工作台只呼叫含 `p_return_date`／`p_reason_code` 的新建立 RPC，舊無原因碼 signature 必須維持 revoked。歷史資料會保留 `LEGACY` 相容值，新退回單不得使用停用代碼。
+
+`0054_warehouse_transfer_correction.sql` 套用後，WAREHOUSE 可從已 POST 發貨或 SHIPPED 補庫明細建立更正；`post_warehouse_transfer_correction` 會鎖來源與品號、重算有效調撥量及兩倉餘額，並以同一 operation key 查回結果。staging 必須驗證正負差額、上限、負庫存、同品號並行鎖與跨來源 response-loss recovery。

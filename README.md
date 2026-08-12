@@ -60,3 +60,5 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`：reference sna
 `0052_correction_source_advisory.sql` 將 HR_ISSUE、RETURN 與 RETURN correction 對同一人資需求的來源更正共用 advisory fence，避免不同品號更正各自持有 item mutex 後互等需求列；staging 必須以同一需求的不同品號並行 POST 驗證可重試且不死結。
 
 `0053_return_reason_codes.sql` 建立可維護的退回原因碼、退回業務日期，撤銷無原因碼的舊建立 RPC，並由 `ReturnPanel` 使用 active reason code 與 Asia/Taipei 業務日期建立新草稿；`LEGACY` 僅供歷史資料相容且停用。
+
+`0054_warehouse_transfer_correction.sql` 補齊 WAREHOUSE_TRANSFER 更正：已 POST 發貨／補庫明細可建立 signed transfer delta，POST 在品號、來源文件／明細與兩倉餘額鎖內重算有效調撥上限，原子新增 GENERAL 出庫與 HR 入庫流水，並提供狀態查回與 WAREHOUSE 工作台。
