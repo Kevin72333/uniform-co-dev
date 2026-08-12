@@ -103,3 +103,5 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 `0053_return_reason_codes.sql` 套用後，先確認 `return_reason_codes` 的正式代碼已由 SYSTEM_ADMIN 維護；退回工作台只呼叫含 `p_return_date`／`p_reason_code` 的新建立 RPC，舊無原因碼 signature 必須維持 revoked。歷史資料會保留 `LEGACY` 相容值，新退回單不得使用停用代碼。
 
 `0054_warehouse_transfer_correction.sql` 套用後，WAREHOUSE 可從已 POST 發貨或 SHIPPED 補庫明細建立更正；`post_warehouse_transfer_correction` 會鎖來源與品號、重算有效調撥量及兩倉餘額，並以同一 operation key 查回結果。staging 必須驗證正負差額、上限、負庫存、同品號並行鎖與跨來源 response-loss recovery。
+
+`0055_stocktake_correction.sql` 套用後，HR／WAREHOUSE 可從各自允許的已 POST 盤點明細建立更正；`post_stocktake_correction` 會鎖盤點、明細、品號、兩倉餘額及受影響預留，將不足覆蓋的需求轉為 `INVENTORY_REVIEW_REQUIRED` 後再完成更正流水。staging 必須驗證盤點差額、角色、負庫存、預留衝突與同 key 查回。

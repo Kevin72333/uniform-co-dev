@@ -62,3 +62,5 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`：reference sna
 `0053_return_reason_codes.sql` 建立可維護的退回原因碼、退回業務日期，撤銷無原因碼的舊建立 RPC，並由 `ReturnPanel` 使用 active reason code 與 Asia/Taipei 業務日期建立新草稿；`LEGACY` 僅供歷史資料相容且停用。
 
 `0054_warehouse_transfer_correction.sql` 補齊 WAREHOUSE_TRANSFER 更正：已 POST 發貨／補庫明細可建立 signed transfer delta，POST 在品號、來源文件／明細與兩倉餘額鎖內重算有效調撥上限，原子新增 GENERAL 出庫與 HR 入庫流水，並提供狀態查回與 WAREHOUSE 工作台。
+
+`0055_stocktake_correction.sql` 補齊 STOCKTAKE 更正：以已 POST 盤點明細為不可變基線，保存 signed counted delta，於盤點倉／兩倉餘額與 active reservations 鎖內重算有效實盤；若更正使預留失去覆蓋，仍完成盤點更正流水並同交易標記相關需求 `INVENTORY_REVIEW_REQUIRED`。

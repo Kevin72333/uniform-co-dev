@@ -17,6 +17,7 @@ import ReturnPanel from "./ReturnPanel";
 import ReturnCorrectionPanel from "./ReturnCorrectionPanel";
 import HrIssueCorrectionPanel from "./HrIssueCorrectionPanel";
 import WarehouseTransferCorrectionPanel from "./WarehouseTransferCorrectionPanel";
+import StocktakeCorrectionPanel from "./StocktakeCorrectionPanel";
 import PdfArtifactPanel from "./PdfArtifactPanel";
 import ErpExportPanel from "./ErpExportPanel";
 import AccountAdminPanel from "./AccountAdminPanel";
@@ -55,6 +56,7 @@ export default function Home() {
       <ReturnCorrectionPanel />
       <HrIssueCorrectionPanel />
       <WarehouseTransferCorrectionPanel />
+      <StocktakeCorrectionPanel />
       <PdfArtifactPanel />
       <ErpExportPanel />
       <WarehouseShipmentPanel />
