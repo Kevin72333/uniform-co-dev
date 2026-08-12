@@ -109,3 +109,5 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 `0057_correction_source_immutability_forward.sql` 必須在 0055 後套用；它只替換既有 trigger function，不改寫業務資料，並將 `original_stocktake_id` 納入 DRAFT／POSTED 更正來源不可變檢查。staging 應嘗試修改盤點更正來源並確認被拒絕。
 
 `0059_receipt_correction_lockset_forward.sql` 必須在 0049 後套用；它在採購入庫更正處理預留衝突前重驗需求／品號集合，集合變動時以 40001 讓 caller 重試，避免跨品號更正持有部分鎖集合。
+
+`0060_pdf_document_type_coverage.sql` 必須在 0039／0041 後套用；它補齊八類 PDF 單據的來源鎖、canonical snapshot hash、renderer payload、角色授權與下載 policy。staging 必須逐一以 HR、WAREHOUSE、PROCUREMENT、CEO 驗證允許／拒絕矩陣，並對正式來源與草稿浮水印各跑一次 claim→payload→upload→finalize→download。

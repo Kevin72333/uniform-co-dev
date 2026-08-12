@@ -3,12 +3,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
-type DocumentType = "HR_REQUEST" | "STOCKTAKE" | "RETURN_NOTE";
+type DocumentType = "HR_REQUEST" | "WAREHOUSE_SHIPMENT" | "REPLENISHMENT" | "STOCKTAKE" | "RETURN_NOTE" | "SEASONAL_APPROVAL" | "PURCHASE_ORDER" | "PURCHASE_RECEIPT";
 type DocumentRow = { id: string; label: string; version: number; hash: string };
 type Artifact = { id: string; status: "PREPARING" | "READY" | "FAILED"; revision: number; template_version: string; storage_object_key: string | null; payload_sha256?: string | null; payload_size_bytes?: number | null; error_message: string | null };
 type ArtifactKind = "FORMAL" | "DRAFT_WATERMARK";
 
-const labels: Record<DocumentType, string> = { HR_REQUEST: "人資需求單", STOCKTAKE: "盤點單", RETURN_NOTE: "退回單" };
+const labels: Record<DocumentType, string> = {
+  HR_REQUEST: "人資需求單",
+  WAREHOUSE_SHIPMENT: "倉庫發貨單",
+  REPLENISHMENT: "補庫單",
+  STOCKTAKE: "盤點單",
+  RETURN_NOTE: "退回單",
+  SEASONAL_APPROVAL: "換季核准單",
+  PURCHASE_ORDER: "採購單",
+  PURCHASE_RECEIPT: "採購入庫單",
+};
+
+const sourceConfig: Record<DocumentType, { table: string; select: string; numberField: string }> = {
+  HR_REQUEST: { table: "hr_requests", select: "id,request_no,status,row_version", numberField: "request_no" },
+  WAREHOUSE_SHIPMENT: { table: "warehouse_shipments", select: "id,shipment_no,status", numberField: "shipment_no" },
+  REPLENISHMENT: { table: "replenishment_requests", select: "id,request_no,status,row_version", numberField: "request_no" },
+  STOCKTAKE: { table: "stocktakes", select: "id,stocktake_no,status", numberField: "stocktake_no" },
+  RETURN_NOTE: { table: "return_notes", select: "id,return_no,status", numberField: "return_no" },
+  SEASONAL_APPROVAL: { table: "seasonal_approvals", select: "id,approval_no,status", numberField: "approval_no" },
+  PURCHASE_ORDER: { table: "purchase_orders", select: "id,po_no,status", numberField: "po_no" },
+  PURCHASE_RECEIPT: { table: "purchase_receipts", select: "id,receipt_no,status", numberField: "receipt_no" },
+};
 
 export default function PdfArtifactPanel() {
   const client = getSupabaseBrowserClient();
@@ -53,15 +73,14 @@ export default function PdfArtifactPanel() {
     const supabase = client;
     let active = true;
     async function load() {
-      const table = documentType === "HR_REQUEST" ? "hr_requests" : documentType === "STOCKTAKE" ? "stocktakes" : "return_notes";
-      const select = documentType === "HR_REQUEST" ? "id,request_no,status,row_version" : documentType === "STOCKTAKE" ? "id,stocktake_no,status" : "id,return_no,status";
-      const result = await supabase.from(table).select(select).order("created_at", { ascending: false }).limit(100);
+      const config = sourceConfig[documentType];
+      const result = await supabase.from(config.table).select(config.select).order("id", { ascending: false }).limit(100);
       if (!active) return;
       if (result.error) { setMessage("單據載入失敗，請確認角色與 RLS 權限。"); return; }
       const rows = (result.data ?? []).map((row) => {
         const record = row as unknown as Record<string, unknown>;
         const id = String(record.id);
-        const label = String(record.request_no ?? record.stocktake_no ?? record.return_no ?? id);
+        const label = String(record[config.numberField] ?? id);
         const version = Number(record.row_version ?? 1) || 1;
         return { id, label: `${label}｜${String(record.status ?? "")}`, version, hash: JSON.stringify(record) };
       });
