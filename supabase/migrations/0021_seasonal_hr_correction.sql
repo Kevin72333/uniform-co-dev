@@ -15,6 +15,7 @@ as $$
 declare
   current_account uuid;
   command_row public.operation_commands;
+  campaign_row public.seasonal_campaigns;
   line_row public.seasonal_demand_lines;
 begin
   current_account := private.current_account_id();
@@ -41,11 +42,16 @@ begin
     end if;
     raise exception using errcode = '40001', message = 'HR correction is already in progress or failed';
   end if;
-  select * into line_row from public.seasonal_demand_lines l where l.id = p_demand_line_id for update;
-  if line_row.id is null then raise exception 'Demand line does not exist'; end if;
-  if not exists (select 1 from public.seasonal_campaigns c where c.id = line_row.campaign_id and c.status = 'HR_REVIEW') then
+  select c.* into campaign_row
+    from public.seasonal_campaigns c
+    join public.seasonal_demand_lines l on l.campaign_id = c.id
+   where l.id = p_demand_line_id
+   for update of c;
+  if campaign_row.id is null or campaign_row.status <> 'HR_REVIEW' then
     raise exception 'Only HR_REVIEW campaign demand can be corrected';
   end if;
+  select * into line_row from public.seasonal_demand_lines l where l.id = p_demand_line_id for update;
+  if line_row.id is null then raise exception 'Demand line does not exist'; end if;
   update public.seasonal_demand_lines
   set quantity = p_quantity, hr_note = left(nullif(btrim(coalesce(p_note, '')), ''), 2000)
   where id = p_demand_line_id returning * into line_row;
