@@ -29,7 +29,7 @@ security definer
 set search_path = pg_catalog, private
 as $$
 begin
-  if session_user <> 'job_renderer_storage_proxy'
+  if current_user <> 'job_renderer_storage_proxy' or session_user <> current_user
      or p_object_key is null or p_object_key like '%..%' or left(p_object_key, 1) = '/' then
     return false;
   end if;
@@ -62,6 +62,26 @@ $$;
 revoke all on function private.renderer_storage_capability(text,text,uuid,text,bigint) from public, anon, authenticated;
 grant usage on schema private to job_renderer_storage_proxy;
 grant execute on function private.renderer_storage_capability(text,text,uuid,text,bigint) to job_renderer_storage_proxy;
+
+create or replace function private.require_document_renderer()
+returns uuid language plpgsql security definer set search_path = pg_catalog, private as $$
+declare a uuid;
+begin
+  if current_user <> 'job_document_renderer' or session_user <> current_user then raise exception using errcode = '42501', message = 'job_document_renderer role is required'; end if;
+  a := private.execution_actor_id();
+  if a is null then raise exception using errcode = '42501', message = 'bound document renderer actor is required'; end if;
+  return a;
+end; $$;
+create or replace function private.require_erp_renderer()
+returns uuid language plpgsql security definer set search_path = pg_catalog, private as $$
+declare a uuid;
+begin
+  if current_user <> 'job_erp_renderer' or session_user <> current_user then raise exception using errcode = '42501', message = 'job_erp_renderer role is required'; end if;
+  a := private.execution_actor_id();
+  if a is null then raise exception using errcode = '42501', message = 'bound ERP renderer actor is required'; end if;
+  return a;
+end; $$;
+revoke all on function private.require_document_renderer(), private.require_erp_renderer() from public, anon, authenticated;
 
 create or replace function private.assign_renderer_generation_object_key()
 returns trigger
@@ -339,7 +359,7 @@ declare
   object_hash text;
   execution_actor uuid;
 begin
-  if session_user <> 'job_import_worker' then raise exception using errcode = '42501', message = 'job_import_worker role is required'; end if;
+  if current_user <> 'job_import_worker' or session_user <> current_user then raise exception using errcode = '42501', message = 'job_import_worker role is required'; end if;
   execution_actor := private.execution_actor_id();
   if p_actor_account_id is null or execution_actor is distinct from p_actor_account_id
      or p_actual_size_bytes is null or p_actual_size_bytes < 1 or p_actual_size_bytes > 10000000
@@ -376,7 +396,7 @@ begin
     from storage.objects o
     where o.bucket_id = batch_row.storage_bucket and o.name = batch_row.storage_object_key
     for update;
-  if not found or object_mime <> batch_row.expected_mime_type or object_size <> batch_row.expected_size_bytes or object_hash <> lower(p_file_sha256) then
+  if not found or object_mime is distinct from batch_row.expected_mime_type or object_size is distinct from batch_row.expected_size_bytes or object_hash is distinct from lower(p_file_sha256) then
     raise exception 'Storage object is missing or verified metadata does not match' using errcode = 'P0001';
   end if;
   update public.import_batches set status = 'UPLOADED', file_sha256 = lower(p_file_sha256), uploaded_at = now(), uploaded_by = p_actor_account_id,
