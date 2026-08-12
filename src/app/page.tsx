@@ -11,6 +11,7 @@ import SeasonalApprovalPanel from "./SeasonalApprovalPanel";
 import SeasonalProcurementPanel from "./SeasonalProcurementPanel";
 import ProcurementReasonCodePanel from "./ProcurementReasonCodePanel";
 import PurchaseReceiptPanel from "./PurchaseReceiptPanel";
+import StocktakePanel from "./StocktakePanel";
 
 export default function Home() {
   return (
@@ -37,6 +38,7 @@ export default function Home() {
       <SeasonalProcurementPanel />
       <ProcurementReasonCodePanel />
       <PurchaseReceiptPanel />
+      <StocktakePanel />
       <WarehouseShipmentPanel />
     </main>
   );
