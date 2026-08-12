@@ -43,17 +43,18 @@ for (const bucket of buckets) {
     for (const entry of listed) {
       if (!entry?.name || entry.name.includes("..") || entry.name.startsWith("/")) throw new Error("Unsafe Storage object name");
       const name = String(entry.name);
+      const fullName = `${prefix}${name}`;
       if (entry.id === null) {
-        const childPrefix = `${prefix}${name}/`;
+        const childPrefix = `${fullName}/`;
         if (!prefixes.includes(childPrefix)) prefixes.push(childPrefix);
         continue;
       }
-      const objectPath = resolve(storageRoot, bucket, name);
+      const objectPath = resolve(storageRoot, bucket, fullName);
       if (!objectPath.startsWith(resolve(storageRoot, bucket) + "\\") && !objectPath.startsWith(resolve(storageRoot, bucket) + "/")) throw new Error("Storage path escaped backup root");
-      const bytes = new Uint8Array(await (await api(`/storage/v1/object/${encodeURIComponent(bucket)}/${name.split("/").map(encodeURIComponent).join("/")}`)).arrayBuffer());
+      const bytes = new Uint8Array(await (await api(`/storage/v1/object/${encodeURIComponent(bucket)}/${fullName.split("/").map(encodeURIComponent).join("/")}`)).arrayBuffer());
       await mkdir(dirname(objectPath), { recursive: true });
       await writeFile(objectPath, bytes, { flag: "wx", mode: 0o600 });
-      objects.push({ bucket, name, bytes: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex"), metadata: entry.metadata ?? null, path: relative(runDir, objectPath).replaceAll("\\", "/") });
+      objects.push({ bucket, name: fullName, bytes: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex"), metadata: entry.metadata ?? null, path: relative(runDir, objectPath).replaceAll("\\", "/") });
     }
     if (listed.length < 1000) break;
   }

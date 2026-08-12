@@ -48,6 +48,8 @@ set account_id = excluded.account_id, is_active = true;
 
 兩個 worker 必須使用同名連線 role，且各自的 DB／Storage secret 僅存在受保護 job；若不啟用 worker，保持 `NOLOGIN`，相關 RPC 會 fail closed。啟用時請限制該 role 的 `CONNECT`／網路來源與 Supabase Storage bucket 範圍，並在工作完成後依維運政策撤回 LOGIN。
 
+PDF／ERP renderer runner 已納入 `scripts/renderer/renderer-worker.mjs`。以同名受控 role 分別執行 `npm run renderer:pdf` 或 `npm run renderer:erp`，並提供 `DATABASE_URL`、`SUPABASE_URL`、`SUPABASE_STORAGE_ADMIN_KEY`、`RENDER_COMMAND`；adapter 必須接受 `--attempt-id`、`--payload`（版本化 immutable DTO）／`--output` 並產生對應 PDF 或 ERP payload。runner 只呼叫 lease-fenced claim／heartbeat／retry／finalize RPC，Storage key 由資料庫 attempt 保留，不能由瀏覽器或 service role 直接寫業務表。此 worker 尚需部署環境注入 secrets、同名 LOGIN 與 `private.job_actor_bindings` 後才會實際產生 READY；未配置時 PREPARING 是預期的 fail-closed 狀態。
+
 備份／還原固定入口已納入版本庫：`scripts/backup/export-db.sh` 以 protected `SUPABASE_DB_URL` 匯出 `public`／`private` application dump，`scripts/backup/export-auth.sh` 以 data-only dump 保留 Auth UUID／identities／MFA factors，`scripts/backup/export-storage.mjs` 只處理程式固定 allowlist（`uniform-imports`、`uniform-artifacts`、`uniform-render-temp`、`uniform-pdf`、`uniform-erp`）中的 private objects，並由 `scripts/backup/create-manifest.mjs` 建立 SHA-256 manifest。從零還原使用 `scripts/restore/restore-from-zero.sh`，需要明確 `CONFIRM_RESTORE=YES`、`BACKUP_DECRYPT_COMMAND`（雙人程序在受保護 staging 解密 application/Auth dump）、新目標資料庫及 Storage Admin credentials，最後執行 `scripts/restore/verify.sql`。GitHub Actions 的 `.github/workflows/backup.yml` 目前刻意只能手動執行；必須先在受保護 environment 設定 `BACKUP_ENCRYPT_COMMAND`（加密並刪除兩份明文 dump）、`BACKUP_OFFSITE_COMMAND`、加密金鑰與雙人保管資料，才可考慮排程，不宣稱 AC-38／RPO/RTO 已通過。
 
 ## Vercel

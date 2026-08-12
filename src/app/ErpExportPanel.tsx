@@ -18,6 +18,43 @@ export default function ErpExportPanel() {
   const [busy, setBusy] = useState(false);
   const [batchKey, setBatchKey] = useState<string | null>(() => typeof window === "undefined" ? null : window.localStorage.getItem("uniform:erp-batch-key"));
   const [artifactKey, setArtifactKey] = useState<string | null>(() => typeof window === "undefined" ? null : window.localStorage.getItem("uniform:erp-artifact-key"));
+  const [recoveryBatchId, setRecoveryBatchId] = useState<string | null>(() => typeof window === "undefined" ? null : window.localStorage.getItem("uniform:erp-batch-id"));
+  const [recoveryArtifactId, setRecoveryArtifactId] = useState<string | null>(() => typeof window === "undefined" ? null : window.localStorage.getItem("uniform:erp-artifact-id"));
+
+  useEffect(() => {
+    if (!client || batch || !recoveryBatchId) return;
+    void client.from("erp_export_batches").select("id,batch_no,distribution_date,institution_code_snapshot,institution_name_snapshot,status,source_snapshot_version,source_snapshot_hash,current_artifact_id").eq("id", recoveryBatchId).maybeSingle().then((result) => {
+      if (!result.error && result.data) setBatch(result.data as Batch);
+    });
+  }, [client, batch, recoveryBatchId]);
+  useEffect(() => {
+    if (!client || batch || !batchKey) return;
+    void client.rpc("get_erp_batch_status", { p_batch_id: null, p_idempotency_key: `CREATE-ERP-${batchKey}` }).then((result) => {
+      if (!result.error && result.data) {
+        const recovered = result.data as Batch;
+        setBatch(recovered);
+        setRecoveryBatchId(recovered.id);
+        window.localStorage.setItem("uniform:erp-batch-id", recovered.id);
+      }
+    });
+  }, [client, batch, batchKey]);
+  useEffect(() => {
+    if (!client || artifact || !recoveryArtifactId) return;
+    void client.rpc("get_erp_artifact_status", { p_artifact_id: recoveryArtifactId, p_idempotency_key: null }).then((result) => {
+      if (!result.error && result.data) setArtifact(result.data as Artifact);
+    });
+  }, [client, artifact, recoveryArtifactId]);
+  useEffect(() => {
+    if (!client || artifact || !artifactKey) return;
+    void client.rpc("get_erp_artifact_status", { p_artifact_id: null, p_idempotency_key: `REQUEST-ERP-ARTIFACT-${artifactKey}` }).then((result) => {
+      if (!result.error && result.data) {
+        const recovered = result.data as Artifact;
+        setArtifact(recovered);
+        setRecoveryArtifactId(recovered.id);
+        window.localStorage.setItem("uniform:erp-artifact-id", recovered.id);
+      }
+    });
+  }, [client, artifact, artifactKey]);
 
   useEffect(() => {
     if (!client) return;
@@ -37,7 +74,7 @@ export default function ErpExportPanel() {
       p_request_fingerprint: JSON.stringify({ distributionDate, institutionId }),
     });
     if (error || !data?.id) setMessage(`ERP 批次結果尚未確認：${error?.message ?? "請使用相同操作重試"}`);
-    else { setBatch(data as Batch); setBatchKey(null); window.localStorage.removeItem("uniform:erp-batch-key"); setMessage("已建立不可變 ERP logical batch；尚未產生鼎新正式檔案。"); }
+    else { setBatch(data as Batch); window.localStorage.setItem("uniform:erp-batch-id", String((data as Batch).id)); setBatchKey(null); window.localStorage.removeItem("uniform:erp-batch-key"); setMessage("已建立不可變 ERP logical batch；尚未產生鼎新正式檔案，可關閉頁面後恢復。"); }
     setBusy(false);
   }
 
@@ -51,7 +88,7 @@ export default function ErpExportPanel() {
       p_request_fingerprint: JSON.stringify({ batchId: batch.id, formatVersion: "UNIFORM-ERP-SALES-v0", sourceSnapshotVersion: batch.source_snapshot_version, sourceSnapshotHash: batch.source_snapshot_hash }),
     });
     if (error || !data?.id) setMessage(`ERP artifact 結果尚未確認：${error?.message ?? "請使用相同操作重試"}`);
-    else { setArtifact(data as Artifact); setArtifactKey(null); window.localStorage.removeItem("uniform:erp-artifact-key"); setMessage("已建立 ERP artifact revision；正式鼎新欄位仍需以成功匯入樣本完成驗證。"); }
+    else { setArtifact(data as Artifact); window.localStorage.setItem("uniform:erp-artifact-id", String((data as Artifact).id)); setArtifactKey(null); window.localStorage.removeItem("uniform:erp-artifact-key"); setMessage("已建立 ERP artifact revision；正式鼎新欄位仍需以成功匯入樣本完成驗證。"); }
     setBusy(false);
   }
 
@@ -78,6 +115,17 @@ export default function ErpExportPanel() {
     setBusy(false);
   }
 
+  function startAnother() {
+    setBatch(null); setArtifact(null); setRecoveryBatchId(null); setRecoveryArtifactId(null); setBatchKey(null); setArtifactKey(null); window.localStorage.removeItem("uniform:erp-batch-id"); window.localStorage.removeItem("uniform:erp-artifact-id"); window.localStorage.removeItem("uniform:erp-batch-key"); window.localStorage.removeItem("uniform:erp-artifact-key"); setMessage("");
+  }
+
+  function retrySameBatch() {
+    if (!batch || artifact?.status !== "FAILED") return;
+    setArtifact(null); setRecoveryArtifactId(null); setArtifactKey(null);
+    window.localStorage.removeItem("uniform:erp-artifact-id"); window.localStorage.removeItem("uniform:erp-artifact-key");
+    setMessage("已保留同一 logical batch，可重新請求下一個 artifact revision。");
+  }
+
   if (!client) return <section className="panel import-panel" aria-label="鼎新 ERP 匯出"><div className="panel-heading"><div><p className="eyebrow">11 / ERP</p><h2>鼎新 ERP 銷貨匯出</h2></div><span className="status-pill">預覽模式</span></div><p className="auth-message">登入 HR 帳號並提供鼎新成功匯入樣本後，才能建立不可變 logical batch 與 artifact revision。</p></section>;
-  return <section className="panel import-panel" aria-label="鼎新 ERP 匯出"><div className="panel-heading"><div><p className="eyebrow">11 / ERP</p><h2>鼎新 ERP 銷貨匯出</h2></div><span className={`status-pill ${artifact?.status === "READY" ? "success" : ""}`}>{artifact?.status ?? batch?.status ?? "待建立"}</span></div><p className="auth-message">系統只把已發貨且尚未匯出的來源凍結成日期＋機構 logical batch；沒有成功匯入樣本前，不宣稱 `UNIFORM-ERP-SALES-v0` 就是正式鼎新格式。</p><div className="form-grid"><label className="field"><span>發放日期</span><input type="date" value={distributionDate} onChange={(event) => { setBatchKey(null); setDistributionDate(event.target.value); }} disabled={busy || Boolean(batch)} /></label><label className="field"><span>機構</span><select value={institutionId} onChange={(event) => { setBatchKey(null); setInstitutionId(event.target.value); }} disabled={busy || Boolean(batch)}><option value="">請選擇</option>{institutions.map((institution) => <option key={institution.id} value={institution.id}>{institution.code}｜{institution.name}</option>)}</select></label></div><div className="button-row"><button className="primary-button" type="button" onClick={() => void createBatch()} disabled={busy || Boolean(batch) || !institutionId}>{busy ? "建立中…" : "建立 ERP logical batch"}</button>{batch ? <button className="secondary-button" type="button" onClick={() => void requestArtifact()} disabled={busy || Boolean(artifact)}>{busy ? "請求中…" : artifact ? "已請求 artifact" : "請求 ERP artifact"}</button> : null}{artifact ? <button className="secondary-button" type="button" onClick={() => void refreshArtifact()} disabled={busy}>{busy ? "查詢中…" : "重新查詢狀態"}</button> : null}{artifact?.status === "READY" ? <button className="secondary-button" type="button" onClick={() => void downloadArtifact()} disabled={busy}>{busy ? "處理中…" : "下載 ERP 檔案"}</button> : null}</div>{batch ? <p className="success-note">{batch.batch_no}／{batch.institution_code_snapshot}／{batch.distribution_date}／來源 hash {batch.source_snapshot_hash}。{artifact ? ` artifact revision ${artifact.revision}／${artifact.status}。` : "可接續請求 artifact。"}</p> : null}{message ? <p className={message.includes("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}</section>;
+  return <section className="panel import-panel" aria-label="鼎新 ERP 匯出"><div className="panel-heading"><div><p className="eyebrow">11 / ERP</p><h2>鼎新 ERP 銷貨匯出</h2></div><span className={`status-pill ${artifact?.status === "READY" ? "success" : ""}`}>{artifact?.status ?? batch?.status ?? "待建立"}</span></div><p className="auth-message">系統只把已發貨且尚未匯出的來源凍結成日期＋機構 logical batch；沒有成功匯入樣本前，不宣稱 `UNIFORM-ERP-SALES-v0` 就是正式鼎新格式。</p><div className="form-grid"><label className="field"><span>發放日期</span><input type="date" value={distributionDate} onChange={(event) => { setBatchKey(null); setDistributionDate(event.target.value); }} disabled={busy || Boolean(batch)} /></label><label className="field"><span>機構</span><select value={institutionId} onChange={(event) => { setBatchKey(null); setInstitutionId(event.target.value); }} disabled={busy || Boolean(batch)}><option value="">請選擇</option>{institutions.map((institution) => <option key={institution.id} value={institution.id}>{institution.code}｜{institution.name}</option>)}</select></label></div><div className="button-row"><button className="primary-button" type="button" onClick={() => void createBatch()} disabled={busy || Boolean(batch) || !institutionId}>{busy ? "建立中…" : "建立 ERP logical batch"}</button>{batch ? <button className="secondary-button" type="button" onClick={() => void requestArtifact()} disabled={busy || Boolean(artifact)}>{busy ? "請求中…" : artifact ? "已請求 artifact" : "請求 ERP artifact"}</button> : null}{artifact ? <button className="secondary-button" type="button" onClick={() => void refreshArtifact()} disabled={busy}>{busy ? "查詢中…" : "重新查詢狀態"}</button> : null}{artifact?.status === "READY" ? <button className="secondary-button" type="button" onClick={() => void downloadArtifact()} disabled={busy}>{busy ? "處理中…" : "下載 ERP 檔案"}</button> : null}{artifact?.status === "FAILED" ? <button className="secondary-button" type="button" onClick={retrySameBatch} disabled={busy}>同批次重產</button> : null}{batch ? <button className="secondary-button" type="button" onClick={startAnother} disabled={busy}>建立另一批次</button> : null}</div>{batch ? <p className="success-note">{batch.batch_no}／{batch.institution_code_snapshot}／{batch.distribution_date}／來源 hash {batch.source_snapshot_hash}。{artifact ? ` artifact revision ${artifact.revision}／${artifact.status}。` : "可接續請求 artifact。"}</p> : null}{message ? <p className={message.includes("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}</section>;
 }
