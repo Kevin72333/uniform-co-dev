@@ -8,7 +8,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const root = resolve(process.env.BACKUP_ROOT ?? "");
 const runId = process.env.BACKUP_RUN_ID;
 const buckets = (process.env.BACKUP_STORAGE_BUCKETS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
-const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform-render-temp"]);
+const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform-render-temp", "uniform-pdf", "uniform-erp"]);
 if (!url || !serviceKey || !process.env.BACKUP_ROOT || !runId || buckets.length === 0) {
   throw new Error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUP_ROOT, BACKUP_RUN_ID and BACKUP_STORAGE_BUCKETS are required");
 }

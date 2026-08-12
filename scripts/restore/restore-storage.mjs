@@ -8,7 +8,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const runDir = resolve(process.env.BACKUP_RUN_DIR ?? "");
 if (!url || !serviceKey || !runDir || runDir === resolve(".")) throw new Error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and BACKUP_RUN_DIR are required");
 const manifest = JSON.parse(await readFile(resolve(runDir, "storage-manifest.json"), "utf8"));
-const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform-render-temp"]);
+const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform-render-temp", "uniform-pdf", "uniform-erp"]);
 if (!Array.isArray(manifest.buckets) || manifest.buckets.some((bucket) => !allowedBuckets.has(bucket)) || new Set(manifest.buckets).size !== manifest.buckets.length) {
   throw new Error("Storage manifest contains an unapproved or duplicate bucket");
 }
