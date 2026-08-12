@@ -87,10 +87,14 @@ declare
   on_hand bigint;
   balance_version bigint;
   active_reserved bigint;
+  combined_on_hand bigint;
+  hr_warehouse_id uuid;
+  general_warehouse_id uuid;
   difference bigint;
   posting_id uuid;
   line_no integer := 0;
   result_row public.stocktakes;
+  conflict_request_id uuid;
 begin
   current_account := private.current_account_id();
   if auth.uid() is null
@@ -164,6 +168,11 @@ begin
      or (not hr_warehouse and not general_warehouse) then
     raise exception using errcode = '42501', message = 'The account cannot post this warehouse stocktake';
   end if;
+  select id into hr_warehouse_id from public.warehouses where purpose = 'HR' and is_active;
+  select id into general_warehouse_id from public.warehouses where purpose = 'GENERAL' and is_active;
+  if hr_warehouse_id is null or general_warehouse_id is null then
+    raise exception 'Both active HR and GENERAL warehouses are required';
+  end if;
 
   select coalesce(array_agg(item_id order by item_id), '{}'::uuid[])
     into current_item_ids
@@ -182,14 +191,15 @@ begin
   end loop;
 
   insert into public.inventory_balances (warehouse_id, item_id)
-  select stocktake_row.warehouse_id, item_id_row.item_id
-  from unnest(item_ids) as item_id_row(item_id)
+  select warehouse_row.id, item_id_row.item_id
+  from (values (hr_warehouse_id), (general_warehouse_id)) as warehouse_row(id),
+       unnest(item_ids) as item_id_row(item_id)
   on conflict (warehouse_id, item_id) do nothing;
   for item_id_row in
     select item_id from unnest(item_ids) as requested(item_id) order by item_id
   loop
     perform 1 from public.inventory_balances b
-    where b.warehouse_id = stocktake_row.warehouse_id and b.item_id = item_id_row.item_id
+    where b.warehouse_id in (hr_warehouse_id, general_warehouse_id) and b.item_id = item_id_row.item_id
     order by b.item_id, b.warehouse_id for update;
   end loop;
   for item_id_row in
@@ -228,8 +238,35 @@ begin
     select coalesce(sum(r.quantity), 0) into active_reserved
     from public.inventory_reservations r
     where r.item_id = line_row.item_id and r.status = 'ACTIVE';
-    if on_hand + difference < active_reserved then
-      raise exception 'Stocktake would uncover active reservations for item %', line_row.item_id;
+    select coalesce(sum(b.on_hand_quantity), 0) into combined_on_hand
+    from public.inventory_balances b
+    where b.warehouse_id in (hr_warehouse_id, general_warehouse_id)
+      and b.item_id = line_row.item_id;
+    if combined_on_hand + difference < active_reserved then
+      -- A real count that uncovers reservations is still posted, but all
+      -- reservations belonging to affected requests are made unusable first.
+      update public.inventory_reservations
+      set status = 'CONFLICTED', closed_at = now()
+      where item_id = line_row.item_id and status = 'ACTIVE';
+      update public.inventory_reservations r
+      set status = 'CONFLICTED', closed_at = now()
+      where r.status = 'ACTIVE'
+        and exists (
+          select 1
+          from public.inventory_reservations affected
+          where affected.source_hr_request_id = r.source_hr_request_id
+            and affected.item_id = line_row.item_id
+            and affected.status = 'CONFLICTED'
+        );
+      update public.hr_requests r
+      set status = 'INVENTORY_REVIEW_REQUIRED', row_version = r.row_version + 1
+      where r.status = 'SUBMITTED'
+        and exists (
+          select 1 from public.inventory_reservations ir
+          where ir.source_hr_request_id = r.id
+            and ir.item_id = line_row.item_id
+            and ir.status = 'CONFLICTED'
+        );
     end if;
   end loop;
 

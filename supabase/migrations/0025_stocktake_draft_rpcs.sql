@@ -1,6 +1,8 @@
 -- Stocktake drafts capture the book quantity/version inside a controlled transaction.
 -- Direct table writes are removed so the UI cannot invent a stale snapshot.
 
+drop function if exists public.update_stocktake_draft(uuid, text, jsonb, text, text);
+
 create or replace function public.create_stocktake_draft(
   p_stocktake_no text,
   p_warehouse_id uuid,
@@ -160,6 +162,7 @@ create or replace function public.update_stocktake_draft(
   p_stocktake_id uuid,
   p_note text,
   p_lines jsonb,
+  p_recount boolean,
   p_idempotency_key text,
   p_request_fingerprint text
 )
@@ -243,6 +246,9 @@ begin
   if stocktake_row.status not in ('DRAFT', 'STALE_COUNT') then
     raise exception 'Only DRAFT or STALE_COUNT stocktakes can be updated';
   end if;
+  if stocktake_row.status = 'STALE_COUNT' and not coalesce(p_recount, false) then
+    raise exception using errcode = '40001', message = 'STALE_COUNT requires a fresh recapture and recount';
+  end if;
   select * into warehouse_row from public.warehouses
   where id = stocktake_row.warehouse_id and is_active;
   if (warehouse_row.purpose = 'HR' and not private.has_role('HR'))
@@ -288,6 +294,10 @@ begin
     where b.warehouse_id = stocktake_row.warehouse_id
       and b.item_id = (line_value ->> 'itemId')::uuid;
     counted_quantity := (line_value ->> 'countedQuantity')::bigint;
+    if stocktake_row.status = 'STALE_COUNT'
+       and counted_quantity <> book_quantity then
+      raise exception using errcode = '40001', message = 'STALE_COUNT requires a fresh recapture and recount';
+    end if;
     difference := counted_quantity - book_quantity;
     if difference <> 0 and btrim(coalesce(line_value ->> 'reason', '')) = '' then
       raise exception 'A reason is required for a stocktake difference';
@@ -314,8 +324,8 @@ end;
 $$;
 
 revoke all on function public.create_stocktake_draft(text, uuid, text, jsonb, text, text) from public, anon;
-revoke all on function public.update_stocktake_draft(uuid, text, jsonb, text, text) from public, anon;
+revoke all on function public.update_stocktake_draft(uuid, text, jsonb, boolean, text, text) from public, anon;
 grant execute on function public.create_stocktake_draft(text, uuid, text, jsonb, text, text) to authenticated;
-grant execute on function public.update_stocktake_draft(uuid, text, jsonb, text, text) to authenticated;
+grant execute on function public.update_stocktake_draft(uuid, text, jsonb, boolean, text, text) to authenticated;
 
 revoke insert, update on public.stocktakes, public.stocktake_lines from authenticated;

@@ -43,7 +43,7 @@ export default function StocktakePanel() {
 
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const selectedWarehouse = warehouses.find((warehouse) => warehouse.id === warehouseId);
-  const canEdit = stocktake?.status === "DRAFT" || stocktake?.status === "STALE_COUNT";
+  const canEdit = stocktake?.status === "DRAFT";
 
   useEffect(() => {
     if (!client) return;
@@ -152,7 +152,7 @@ export default function StocktakePanel() {
       p_idempotency_key: `CREATE-STOCKTAKE-${key}`, p_request_fingerprint: fingerprint(),
     });
     if (error || !data?.id) {
-      setMessage(`盤點草稿建立失敗：${error?.message ?? "未回傳盤點單"}`);
+      setMessage(`盤點草稿結果尚未確認：${error?.message ?? "請使用相同操作重試，系統會查回既有結果"}`);
       setBusy(false); return;
     }
     const created = data as Stocktake;
@@ -172,14 +172,15 @@ export default function StocktakePanel() {
     setBusy(true); setMessage("");
     const key = updateKeyRef.current ?? crypto.randomUUID();
     updateKeyRef.current = key;
-    const requestFingerprint = JSON.stringify({ stocktakeId: stocktake.id, note: note.trim(), lines: linesToSave });
+    const requestFingerprint = JSON.stringify({ stocktakeId: stocktake.id, note: note.trim(), lines: linesToSave, recount: false });
     const { data, error } = await client.rpc("update_stocktake_draft", {
       p_stocktake_id: stocktake.id, p_note: note.trim() || null,
+      p_recount: false,
       p_lines: linesToSave.map((line) => ({ itemId: line.item_id, countedQuantity: line.counted_quantity, reason: line.reason.trim() })),
       p_idempotency_key: `UPDATE-STOCKTAKE-${key}`, p_request_fingerprint: requestFingerprint,
     });
     if (error || !data?.id) {
-      setMessage(`盤點草稿更新失敗：${error?.message ?? "未回傳盤點單"}`);
+      setMessage(`盤點草稿更新結果尚未確認：${error?.message ?? "請使用相同操作重試，系統會查回既有結果"}`);
       setBusy(false); return;
     }
     updateKeyRef.current = null;
@@ -199,11 +200,24 @@ export default function StocktakePanel() {
       return { ...line, book_quantity_snapshot: balance.on_hand_quantity, balance_version_snapshot: balance.version, counted_quantity: balance.on_hand_quantity, reason: "" };
     });
     setLines(resetLines);
-    await updateDraft(resetLines);
+    setBusy(true); setMessage("");
+    const key = updateKeyRef.current ?? crypto.randomUUID();
+    updateKeyRef.current = key;
+    const { data, error } = await client.rpc("update_stocktake_draft", {
+      p_stocktake_id: stocktake.id, p_note: note.trim() || null, p_recount: true,
+      p_lines: resetLines.map((line) => ({ itemId: line.item_id, countedQuantity: line.counted_quantity, reason: "" })),
+      p_idempotency_key: `RECOUNT-STOCKTAKE-${key}`,
+      p_request_fingerprint: JSON.stringify({ stocktakeId: stocktake.id, note: note.trim(), lines: resetLines, recount: true }),
+    });
+    if (error || !data?.id) { setMessage(`重新擷取帳面結果尚未確認：${error?.message ?? "請使用相同操作重試"}`); setBusy(false); return; }
+    updateKeyRef.current = null;
+    setStocktake(data as Stocktake);
+    setMessage("已重新擷取帳面並將實盤量重設為最新帳面；請重新確認實盤後保存，再 POST。");
+    setBusy(false);
   }
 
   async function postStocktake() {
-    if (!client || !stocktake || stocktake.status === "POSTED") return;
+    if (!client || !stocktake || stocktake.status !== "DRAFT") return;
     setBusy(true); setMessage("");
     const key = postKeyRef.current ?? crypto.randomUUID();
     postKeyRef.current = key;
@@ -212,7 +226,7 @@ export default function StocktakePanel() {
       p_request_fingerprint: JSON.stringify({ stocktakeId: stocktake.id, lines }),
     });
     if (error) {
-      setMessage(`盤點 POST 失敗：${error.message}`);
+      setMessage(`盤點 POST 結果尚未確認：${error.message}；請使用相同操作重試，避免建立第二筆流水。`);
       setBusy(false); return;
     }
     const posted = data as Stocktake;
@@ -239,7 +253,7 @@ export default function StocktakePanel() {
     </div>
     <label className="field reason-field"><span>盤點備註（選填）</span><input value={note} onChange={(event) => { resetOperationKeys(); setNote(event.target.value); }} disabled={busy || stocktake?.status === "POSTED"} maxLength={2000} /></label>
     {lines.length > 0 ? <div className="summary-list">{lines.map((line) => { const item = itemById.get(line.item_id); const difference = line.counted_quantity - line.book_quantity_snapshot; return <div className="summary-row" key={line.item_id}><span><strong>{item?.item_code ?? line.item_id}｜{item?.item_name ?? "品號"}</strong><small>帳面 {line.book_quantity_snapshot}／版本 {line.balance_version_snapshot}／差額 {difference}</small></span><label className="field"><span className="sr-only">實盤量</span><input type="number" min={0} value={line.counted_quantity} disabled={busy || !canEdit} onChange={(event) => updateLine(line.item_id, "counted_quantity", event.target.value)} /></label><label className="field"><span className="sr-only">差異原因</span><input value={line.reason} disabled={busy || !canEdit} onChange={(event) => updateLine(line.item_id, "reason", event.target.value)} placeholder={difference === 0 ? "無差異" : "差異原因（必填）"} maxLength={500} /></label>{!stocktake ? <button className="text-button" type="button" onClick={() => removeLine(line.item_id)} disabled={busy}>移除</button> : null}</div>; })}</div> : <p className="auth-message">請先加入要盤點的品號。</p>}
-    <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(stocktake) || lines.length === 0}>{busy ? "建立中…" : "建立盤點草稿"}</button>{stocktake && canEdit ? <button className="secondary-button" type="button" onClick={() => void updateDraft()} disabled={busy || lines.length === 0}>{busy ? "保存中…" : "保存盤點草稿"}</button> : null}{stocktake?.status === "STALE_COUNT" ? <button className="secondary-button" type="button" onClick={() => void recaptureBook()} disabled={busy}>{busy ? "擷取中…" : "重新擷取帳面並開始重盤"}</button> : null}{stocktake && stocktake.status !== "POSTED" ? <button className="secondary-button" type="button" onClick={() => void postStocktake()} disabled={busy || lines.length === 0 || lines.some((line) => line.counted_quantity - line.book_quantity_snapshot !== 0 && !line.reason.trim())}>{busy ? "POST 中…" : "確認並 POST 盤點"}</button> : null}</div>
+    <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(stocktake) || lines.length === 0}>{busy ? "建立中…" : "建立盤點草稿"}</button>{stocktake?.status === "DRAFT" ? <button className="secondary-button" type="button" onClick={() => void updateDraft()} disabled={busy || lines.length === 0}>{busy ? "保存中…" : "保存盤點草稿"}</button> : null}{stocktake?.status === "STALE_COUNT" ? <button className="secondary-button" type="button" onClick={() => void recaptureBook()} disabled={busy}>{busy ? "擷取中…" : "重新擷取帳面並開始重盤"}</button> : null}{stocktake?.status === "DRAFT" ? <button className="secondary-button" type="button" onClick={() => void postStocktake()} disabled={busy || lines.length === 0 || lines.some((line) => line.counted_quantity - line.book_quantity_snapshot !== 0 && !line.reason.trim())}>{busy ? "POST 中…" : "確認並 POST 盤點"}</button> : null}</div>
     {stocktake?.status === "POSTED" ? <p className="success-note">盤點單 {stocktake.stocktake_no} 已 POST，原盤點與流水均已鎖定。</p> : null}
     {message ? <p className={message.includes("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
   </section>;
