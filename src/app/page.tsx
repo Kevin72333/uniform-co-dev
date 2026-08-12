@@ -14,6 +14,7 @@ import PurchaseReceiptPanel from "./PurchaseReceiptPanel";
 import StocktakePanel from "./StocktakePanel";
 import ReturnPanel from "./ReturnPanel";
 import PdfArtifactPanel from "./PdfArtifactPanel";
+import ErpExportPanel from "./ErpExportPanel";
 
 export default function Home() {
   return (
@@ -43,6 +44,7 @@ export default function Home() {
       <StocktakePanel />
       <ReturnPanel />
       <PdfArtifactPanel />
+      <ErpExportPanel />
       <WarehouseShipmentPanel />
     </main>
   );
