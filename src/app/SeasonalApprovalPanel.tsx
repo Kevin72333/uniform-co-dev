@@ -38,7 +38,7 @@ export default function SeasonalApprovalPanel() {
   }, [client]);
 
   useEffect(() => {
-    if (!client || !submissionId) { setLines([]); return; }
+    if (!client || !submissionId) return;
     let active = true;
     void client.from("seasonal_approval_submission_lines").select("item_id,item_code_snapshot,item_name_snapshot,size_snapshot,unit_snapshot,demand_quantity_snapshot").eq("submission_id", submissionId).order("item_code_snapshot").then(({ data, error }) => {
       if (!active) return;
@@ -73,13 +73,13 @@ export default function SeasonalApprovalPanel() {
     <div className="panel-heading"><div><p className="eyebrow">10 / CEO REVIEW</p><h2>CEO 換季審核</h2></div><span className="status-pill">待核 {submissions.length} 件</span></div>
     <p className="auth-message">系統會重驗畫面所見的 revision 與需求雜湊；資料被 HR 修改或版本已變更時，審核會拒絕並要求重新載入。</p>
     <div className="form-grid">
-      <label className="field"><span>待核送核版本</span><select value={submissionId} onChange={(event) => setSubmissionId(event.target.value)} disabled={busy}><option value="">請選擇</option>{submissions.map((row) => { const item = campaigns.find((campaignRow) => campaignRow.id === row.campaign_id); return <option key={row.id} value={row.id}>{item?.campaign_no ?? row.campaign_id}｜rev {row.revision}｜{new Date(row.submitted_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}</option>; })}</select></label>
-      <label className="field"><span>決定</span><select value={decision} onChange={(event) => setDecision(event.target.value as "APPROVE" | "RETURN")} disabled={busy}><option value="APPROVE">核准</option><option value="RETURN">退回 HR</option></select></label>
+      <label className="field"><span>待核送核版本</span><select value={submissionId} onChange={(event) => { reviewKeyRef.current = null; setSubmissionId(event.target.value); }} disabled={busy}><option value="">請選擇</option>{submissions.map((row) => { const item = campaigns.find((campaignRow) => campaignRow.id === row.campaign_id); return <option key={row.id} value={row.id}>{item?.campaign_no ?? row.campaign_id}｜rev {row.revision}｜{new Date(row.submitted_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}</option>; })}</select></label>
+      <label className="field"><span>決定</span><select value={decision} onChange={(event) => { reviewKeyRef.current = null; setDecision(event.target.value as "APPROVE" | "RETURN"); }} disabled={busy}><option value="APPROVE">核准</option><option value="RETURN">退回 HR</option></select></label>
     </div>
     {selected ? <p className="muted">{campaign?.name ?? "換季活動"}／rev {selected.revision}／snapshot {selected.demand_snapshot_hash}</p> : null}
     {selected && lines.length === 0 ? <p className="auth-message">送核明細尚未載入，暫停核准以避免盲核。</p> : null}
     {lines.length > 0 ? <div className="summary-list">{lines.map((line) => <div className="summary-row" key={line.item_id}><span><strong>{line.item_code_snapshot}｜{line.item_name_snapshot}</strong><small>{line.size_snapshot ? `尺寸 ${line.size_snapshot}｜` : ""}{line.unit_snapshot}</small></span><strong>{line.demand_quantity_snapshot}</strong></div>)}</div> : null}
-    <label className="field"><span>退回理由（核准可留白）</span><input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} disabled={busy} placeholder="例如：請確認某機構需求數量" /></label>
+    <label className="field"><span>退回理由（核准可留白）</span><input value={reason} onChange={(event) => { reviewKeyRef.current = null; setReason(event.target.value); }} maxLength={500} disabled={busy} placeholder="例如：請確認某機構需求數量" /></label>
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void review()} disabled={busy || !selected || lines.length === 0}>{busy ? "送出中…" : decision === "APPROVE" ? "核准此版本" : "退回 HR"}</button></div>
     {message ? <p className={message.startsWith("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
   </section>;
