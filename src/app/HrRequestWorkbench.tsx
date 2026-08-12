@@ -222,9 +222,14 @@ export default function HrRequestWorkbench() {
             <p className="eyebrow">04 / ITEM SUMMARY</p>
             <h2>送出前品號檢查</h2>
           </div>
-          <span className={`status-pill ${result.error ? "danger" : "success"}`}>
-            {result.error ? "不可送出" : "可送出預覽"}
-          </span>
+          <div className="heading-actions">
+            <span className={`status-pill ${result.error ? "danger" : "success"}`}>
+              {result.error ? "不可送出" : "可送出預覽"}
+            </span>
+            <button className="secondary-button print-button" type="button" onClick={() => window.print()}>
+              列印 A4 預覽
+            </button>
+          </div>
         </div>
         {result.error ? (
           <div className="error-box" role="alert">
