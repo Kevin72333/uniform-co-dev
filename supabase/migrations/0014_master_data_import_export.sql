@@ -23,14 +23,68 @@ create table public.master_import_rows (
   unique (batch_id, row_number)
 );
 
+create table public.master_import_events (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null references public.master_import_batches(id),
+  actor_account_id uuid not null references public.app_accounts(id),
+  entity_type text not null,
+  event_type text not null check (event_type in ('VALIDATION_FAILED', 'APPLIED')),
+  row_count integer not null check (row_count >= 0),
+  error_count integer not null check (error_count >= 0),
+  created_at timestamptz not null default now()
+);
+
+create table public.master_import_changes (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null references public.master_import_batches(id),
+  actor_account_id uuid not null references public.app_accounts(id),
+  entity_type text not null,
+  entity_key text not null,
+  action text not null check (action in ('INSERT', 'UPDATE')),
+  old_values jsonb,
+  new_values jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+create table public.master_export_batches (
+  id uuid primary key default gen_random_uuid(),
+  entity_type text not null check (entity_type in ('INSTITUTIONS', 'DEPARTMENTS', 'UNIFORM_ITEMS', 'SUPPLIERS', 'SUPPLIER_ITEMS')),
+  status text not null default 'READY' check (status in ('READY', 'FAILED')),
+  payload jsonb not null,
+  requested_by uuid not null references public.app_accounts(id),
+  requested_at timestamptz not null default now(),
+  downloaded_at timestamptz,
+  downloaded_by uuid references public.app_accounts(id)
+);
+
+create table public.master_export_events (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null references public.master_export_batches(id),
+  actor_account_id uuid not null references public.app_accounts(id),
+  event_type text not null check (event_type in ('REQUESTED', 'DOWNLOADED')),
+  created_at timestamptz not null default now()
+);
+
 alter table public.master_import_batches enable row level security;
 alter table public.master_import_rows enable row level security;
+alter table public.master_import_events enable row level security;
+alter table public.master_import_changes enable row level security;
+alter table public.master_export_batches enable row level security;
+alter table public.master_export_events enable row level security;
 create policy master_import_batches_read on public.master_import_batches
   for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
 create policy master_import_rows_read on public.master_import_rows
   for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
-revoke all on table public.master_import_batches, public.master_import_rows from public, anon, authenticated;
-grant select on public.master_import_batches, public.master_import_rows to authenticated;
+create policy master_import_events_read on public.master_import_events
+  for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
+create policy master_import_changes_read on public.master_import_changes
+  for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
+create policy master_export_batches_read on public.master_export_batches
+  for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
+create policy master_export_events_read on public.master_export_events
+  for select to authenticated using (private.has_role('HR') or private.has_role('PROCUREMENT'));
+revoke all on table public.master_import_batches, public.master_import_rows, public.master_import_events, public.master_import_changes, public.master_export_batches, public.master_export_events from public, anon, authenticated;
+grant select on public.master_import_batches, public.master_import_rows, public.master_import_events, public.master_import_changes, public.master_export_batches, public.master_export_events to authenticated;
 
 create or replace function public.apply_master_import(
   p_entity_type text,
@@ -66,6 +120,9 @@ declare
   seen_values text[] := '{}'::text[];
   target_id uuid;
   item_id_target uuid;
+  lock_key text;
+  old_values jsonb;
+  change_key text;
 begin
   current_account := private.current_account_id();
   if auth.uid() is null or coalesce(auth.jwt() ->> 'role', '') <> 'authenticated' or current_account is null then
@@ -74,6 +131,7 @@ begin
   if entity_type not in ('INSTITUTIONS', 'DEPARTMENTS', 'UNIFORM_ITEMS', 'SUPPLIERS', 'SUPPLIER_ITEMS')
      or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0
      or jsonb_array_length(p_rows) > 10000
+     or pg_column_size(p_rows) > 10000000
      or btrim(coalesce(p_idempotency_key, '')) = '' or btrim(coalesce(p_request_fingerprint, '')) = '' then
     raise exception 'Master import fields are invalid';
   end if;
@@ -88,11 +146,36 @@ begin
     where operation_code = 'APPLY_MASTER_IMPORT_' || entity_type and idempotency_key = p_idempotency_key for update;
     if command_row.actor_account_id <> current_account or command_row.canonical_request_fingerprint <> p_request_fingerprint then raise exception using errcode = '40001', message = 'idempotency key conflicts with another request'; end if;
     if command_row.status = 'SUCCEEDED' then select * into batch_row from public.master_import_batches where id = command_row.result_entity_id; return batch_row; end if;
+    if command_row.status in ('RETRYABLE_FAILED', 'TERMINAL_FAILED') and command_row.result_entity_id is not null then
+      select * into batch_row from public.master_import_batches where id = command_row.result_entity_id;
+      return batch_row;
+    end if;
     raise exception using errcode = '40001', message = 'Master import is already in progress or failed';
   end if;
   insert into public.master_import_batches (entity_type, source_filename, created_by)
   values (entity_type, left(nullif(btrim(p_source_filename), ''), 255), current_account)
   returning * into batch_row;
+  if entity_type = 'INSTITUTIONS' then
+    for lock_key in select distinct btrim(coalesce(value ->> 'code', '')) from jsonb_array_elements(p_rows) value order by 1 loop
+      perform pg_advisory_xact_lock(hashtextextended('uniform-master:' || entity_type || ':' || lock_key, 0));
+    end loop;
+  elsif entity_type = 'DEPARTMENTS' then
+    for lock_key in select distinct btrim(coalesce(value ->> 'institutionCode', '')) || ':' || btrim(coalesce(value ->> 'code', '')) from jsonb_array_elements(p_rows) value order by 1 loop
+      perform pg_advisory_xact_lock(hashtextextended('uniform-master:' || entity_type || ':' || lock_key, 0));
+    end loop;
+  elsif entity_type = 'UNIFORM_ITEMS' then
+    for lock_key in select distinct btrim(coalesce(value ->> 'code', '')) from jsonb_array_elements(p_rows) value order by 1 loop
+      perform pg_advisory_xact_lock(hashtextextended('uniform-master:' || entity_type || ':' || lock_key, 0));
+    end loop;
+  elsif entity_type = 'SUPPLIERS' then
+    for lock_key in select distinct btrim(coalesce(value ->> 'supplierCode', '')) from jsonb_array_elements(p_rows) value order by 1 loop
+      perform pg_advisory_xact_lock(hashtextextended('uniform-master:' || entity_type || ':' || lock_key, 0));
+    end loop;
+  else
+    for lock_key in select distinct btrim(coalesce(value ->> 'supplierCode', '')) || ':' || btrim(coalesce(value ->> 'itemCode', '')) from jsonb_array_elements(p_rows) value order by 1 loop
+      perform pg_advisory_xact_lock(hashtextextended('uniform-master:' || entity_type || ':' || lock_key, 0));
+    end loop;
+  end if;
   for row_value in select value from jsonb_array_elements(p_rows) loop
     row_no := row_no + 1; import_row_count := import_row_count + 1; error_code := null; error_message := null;
     code := btrim(coalesce(row_value ->> case when entity_type = 'SUPPLIERS' then 'supplierCode' else 'code' end, ''));
@@ -161,25 +244,63 @@ begin
   end loop;
   update public.master_import_batches set row_count = import_row_count, error_count = import_error_count, status = case when import_error_count = 0 then 'APPLIED' else 'FAILED' end, completed_at = now(), error_message = case when import_error_count = 0 then null else 'Master import contains validation errors' end where id = batch_row.id returning * into batch_row;
   if import_error_count > 0 then
+    insert into public.master_import_events (batch_id, actor_account_id, entity_type, event_type, row_count, error_count)
+    values (batch_row.id, current_account, entity_type, 'VALIDATION_FAILED', import_row_count, import_error_count);
     update public.operation_commands set status = 'RETRYABLE_FAILED', result_entity_type = 'master_import_batches', result_entity_id = batch_row.id, last_error_code = 'VALIDATION_FAILED' where id = command_row.id;
     return batch_row;
   end if;
   for row_value in select raw_values from public.master_import_rows where batch_id = batch_row.id order by row_number loop
     if entity_type = 'INSTITUTIONS' then
-      insert into public.institutions (code, name, is_active) values (btrim(row_value ->> 'code'), btrim(row_value ->> 'name'), coalesce((row_value ->> 'isActive')::boolean, true)) on conflict (code) do update set name = excluded.name, is_active = excluded.is_active;
+      change_key := btrim(row_value ->> 'code');
+      select to_jsonb(i) into old_values from public.institutions i where i.code = change_key for update;
+      insert into public.master_import_changes (batch_id, actor_account_id, entity_type, entity_key, action, old_values, new_values)
+      values (batch_row.id, current_account, entity_type, change_key, case when old_values is null then 'INSERT' else 'UPDATE' end, old_values, row_value);
+      insert into public.institutions as target (code, name, is_active) values (change_key, btrim(row_value ->> 'name'), coalesce((row_value ->> 'isActive')::boolean, true))
+      on conflict (code) do update set name = excluded.name, is_active = coalesce((row_value ->> 'isActive')::boolean, target.is_active);
     elsif entity_type = 'DEPARTMENTS' then
       select id into target_id from public.institutions where code = btrim(row_value ->> 'institutionCode');
-      insert into public.departments (institution_id, code, name, is_active) values (target_id, btrim(row_value ->> 'code'), btrim(row_value ->> 'name'), coalesce((row_value ->> 'isActive')::boolean, true)) on conflict (institution_id, code) do update set name = excluded.name, is_active = excluded.is_active;
+      change_key := btrim(row_value ->> 'institutionCode') || ':' || btrim(row_value ->> 'code');
+      select to_jsonb(d) into old_values from public.departments d where d.institution_id = target_id and d.code = btrim(row_value ->> 'code') for update;
+      insert into public.master_import_changes (batch_id, actor_account_id, entity_type, entity_key, action, old_values, new_values)
+      values (batch_row.id, current_account, entity_type, change_key, case when old_values is null then 'INSERT' else 'UPDATE' end, old_values, row_value);
+      insert into public.departments as target (institution_id, code, name, is_active) values (target_id, btrim(row_value ->> 'code'), btrim(row_value ->> 'name'), coalesce((row_value ->> 'isActive')::boolean, true))
+      on conflict (institution_id, code) do update set name = excluded.name, is_active = coalesce((row_value ->> 'isActive')::boolean, target.is_active);
     elsif entity_type = 'UNIFORM_ITEMS' then
-      insert into public.uniform_items (item_code, item_name, unit, size, is_active) values (btrim(row_value ->> 'code'), btrim(row_value ->> 'name'), btrim(row_value ->> 'unit'), nullif(btrim(row_value ->> 'size'), ''), coalesce((row_value ->> 'isActive')::boolean, true)) on conflict (item_code) do update set item_name = excluded.item_name, unit = excluded.unit, size = excluded.size, is_active = excluded.is_active;
+      change_key := btrim(row_value ->> 'code');
+      select to_jsonb(i) into old_values from public.uniform_items i where i.item_code = change_key for update;
+      insert into public.master_import_changes (batch_id, actor_account_id, entity_type, entity_key, action, old_values, new_values)
+      values (batch_row.id, current_account, entity_type, change_key, case when old_values is null then 'INSERT' else 'UPDATE' end, old_values, row_value);
+      insert into public.uniform_items as target (item_code, item_name, unit, size, category, season, is_active) values (change_key, btrim(row_value ->> 'name'), btrim(row_value ->> 'unit'), nullif(btrim(row_value ->> 'size'), ''), nullif(btrim(row_value ->> 'category'), ''), nullif(btrim(row_value ->> 'season'), ''), coalesce((row_value ->> 'isActive')::boolean, true))
+      on conflict (item_code) do update set item_name = excluded.item_name, unit = excluded.unit,
+        size = case when row_value ? 'size' and btrim(coalesce(row_value ->> 'size', '')) <> '' then excluded.size else target.size end,
+        category = case when row_value ? 'category' and btrim(coalesce(row_value ->> 'category', '')) <> '' then excluded.category else target.category end,
+        season = case when row_value ? 'season' and btrim(coalesce(row_value ->> 'season', '')) <> '' then excluded.season else target.season end,
+        is_active = coalesce((row_value ->> 'isActive')::boolean, target.is_active);
     elsif entity_type = 'SUPPLIERS' then
-      insert into public.suppliers (supplier_code, name, default_currency, is_active) values (btrim(row_value ->> 'supplierCode'), btrim(row_value ->> 'name'), nullif(upper(btrim(row_value ->> 'defaultCurrency')), ''), coalesce((row_value ->> 'isActive')::boolean, true)) on conflict (supplier_code) do update set name = excluded.name, default_currency = excluded.default_currency, is_active = excluded.is_active;
+      change_key := btrim(row_value ->> 'supplierCode');
+      select to_jsonb(s) into old_values from public.suppliers s where s.supplier_code = change_key for update;
+      insert into public.master_import_changes (batch_id, actor_account_id, entity_type, entity_key, action, old_values, new_values)
+      values (batch_row.id, current_account, entity_type, change_key, case when old_values is null then 'INSERT' else 'UPDATE' end, old_values, row_value);
+      insert into public.suppliers as target (supplier_code, name, default_currency, is_active) values (change_key, btrim(row_value ->> 'name'), nullif(upper(btrim(row_value ->> 'defaultCurrency')), ''), coalesce((row_value ->> 'isActive')::boolean, true))
+      on conflict (supplier_code) do update set name = excluded.name,
+        default_currency = case when row_value ? 'defaultCurrency' and btrim(coalesce(row_value ->> 'defaultCurrency', '')) <> '' then excluded.default_currency else target.default_currency end,
+        is_active = coalesce((row_value ->> 'isActive')::boolean, target.is_active);
     else
       select id into target_id from public.suppliers where supplier_code = btrim(row_value ->> 'supplierCode');
       select id into item_id_target from public.uniform_items where item_code = btrim(row_value ->> 'itemCode');
-      insert into public.supplier_uniform_items (supplier_id, item_id, minimum_order_quantity, supplier_item_code, is_active) values (target_id, item_id_target, nullif(row_value ->> 'minimumOrderQuantity', '')::bigint, nullif(btrim(row_value ->> 'supplierItemCode'), ''), coalesce((row_value ->> 'isActive')::boolean, true)) on conflict (supplier_id, item_id) do update set minimum_order_quantity = excluded.minimum_order_quantity, supplier_item_code = excluded.supplier_item_code, is_active = excluded.is_active;
+      change_key := btrim(row_value ->> 'supplierCode') || ':' || btrim(row_value ->> 'itemCode');
+      select to_jsonb(si) into old_values from public.supplier_uniform_items si where si.supplier_id = target_id and si.item_id = item_id_target for update;
+      insert into public.master_import_changes (batch_id, actor_account_id, entity_type, entity_key, action, old_values, new_values)
+      values (batch_row.id, current_account, entity_type, change_key, case when old_values is null then 'INSERT' else 'UPDATE' end, old_values, row_value);
+      insert into public.supplier_uniform_items as target (supplier_id, item_id, minimum_order_quantity, supplier_item_code, is_active) values (target_id, item_id_target, nullif(row_value ->> 'minimumOrderQuantity', '')::bigint, nullif(btrim(row_value ->> 'supplierItemCode'), ''), coalesce((row_value ->> 'isActive')::boolean, true))
+      on conflict (supplier_id, item_id) do update set
+        minimum_order_quantity = case when row_value ? 'minimumOrderQuantity' and btrim(coalesce(row_value ->> 'minimumOrderQuantity', '')) <> '' then excluded.minimum_order_quantity else target.minimum_order_quantity end,
+        supplier_item_code = case when row_value ? 'supplierItemCode' and btrim(coalesce(row_value ->> 'supplierItemCode', '')) <> '' then excluded.supplier_item_code else target.supplier_item_code end,
+        is_active = coalesce((row_value ->> 'isActive')::boolean, target.is_active);
     end if;
   end loop;
+  insert into public.master_import_events (batch_id, actor_account_id, entity_type, event_type, row_count, error_count)
+  values (batch_row.id, current_account, entity_type, 'APPLIED', import_row_count, 0);
   update public.operation_commands set status = 'SUCCEEDED', result_entity_type = 'master_import_batches', result_entity_id = batch_row.id, succeeded_at = now() where id = command_row.id;
   return batch_row;
 end;
@@ -210,3 +331,99 @@ revoke all on function public.apply_master_import(text, text, jsonb, text, text)
 revoke all on function public.export_master_data(text) from public, anon;
 grant execute on function public.apply_master_import(text, text, jsonb, text, text) to authenticated;
 grant execute on function public.export_master_data(text) to authenticated;
+
+-- Versioned export command: the payload uses the same stable-code contract as import.
+create or replace function public.export_master_data(
+  p_entity_type text,
+  p_idempotency_key text,
+  p_request_fingerprint text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, private
+as $$
+declare
+  current_account uuid;
+  command_row public.operation_commands;
+  batch_row public.master_export_batches;
+  entity_type text := upper(btrim(coalesce(p_entity_type, '')));
+  payload jsonb;
+begin
+  current_account := private.current_account_id();
+  if auth.uid() is null or coalesce(auth.jwt() ->> 'role', '') <> 'authenticated' or current_account is null then
+    raise exception using errcode = '42501', message = 'Authenticated account is required';
+  end if;
+  if entity_type not in ('INSTITUTIONS', 'DEPARTMENTS', 'UNIFORM_ITEMS', 'SUPPLIERS', 'SUPPLIER_ITEMS')
+     or btrim(coalesce(p_idempotency_key, '')) = '' or btrim(coalesce(p_request_fingerprint, '')) = '' then
+    raise exception 'Master export fields are invalid';
+  end if;
+  if not (private.has_role('HR') or (private.has_role('PROCUREMENT') and entity_type in ('SUPPLIERS', 'SUPPLIER_ITEMS'))) then
+    raise exception using errcode = '42501', message = 'Role cannot export this master data';
+  end if;
+  insert into public.operation_commands (operation_code, idempotency_key, canonical_request_fingerprint, actor_account_id)
+  values ('EXPORT_MASTER_DATA_' || entity_type, p_idempotency_key, p_request_fingerprint, current_account)
+  on conflict (operation_code, idempotency_key) do nothing returning * into command_row;
+  if command_row.id is null then
+    select * into command_row from public.operation_commands
+    where operation_code = 'EXPORT_MASTER_DATA_' || entity_type and idempotency_key = p_idempotency_key for update;
+    if command_row.actor_account_id <> current_account or command_row.canonical_request_fingerprint <> p_request_fingerprint then
+      raise exception using errcode = '40001', message = 'idempotency key conflicts with another request';
+    end if;
+    if command_row.status = 'SUCCEEDED' and command_row.result_entity_id is not null then
+      select * into batch_row from public.master_export_batches where id = command_row.result_entity_id;
+      return jsonb_build_object('batchId', batch_row.id, 'rows', batch_row.payload);
+    end if;
+    raise exception using errcode = '40001', message = 'Master export is already in progress or failed';
+  end if;
+  if entity_type = 'INSTITUTIONS' then
+    select coalesce(jsonb_agg(jsonb_build_object('code', i.code, 'name', i.name, 'isActive', i.is_active) order by i.code), '[]'::jsonb) into payload from public.institutions i;
+  elsif entity_type = 'DEPARTMENTS' then
+    select coalesce(jsonb_agg(jsonb_build_object('institutionCode', i.code, 'code', d.code, 'name', d.name, 'isActive', d.is_active) order by i.code, d.code), '[]'::jsonb) into payload
+    from public.departments d join public.institutions i on i.id = d.institution_id;
+  elsif entity_type = 'UNIFORM_ITEMS' then
+    select coalesce(jsonb_agg(jsonb_build_object('code', i.item_code, 'name', i.item_name, 'unit', i.unit, 'size', i.size, 'category', i.category, 'season', i.season, 'isActive', i.is_active) order by i.item_code), '[]'::jsonb) into payload from public.uniform_items i;
+  elsif entity_type = 'SUPPLIERS' then
+    select coalesce(jsonb_agg(jsonb_build_object('supplierCode', s.supplier_code, 'name', s.name, 'defaultCurrency', btrim(s.default_currency), 'isActive', s.is_active) order by s.supplier_code), '[]'::jsonb) into payload from public.suppliers s;
+  else
+    select coalesce(jsonb_agg(jsonb_build_object('supplierCode', s.supplier_code, 'itemCode', i.item_code, 'minimumOrderQuantity', si.minimum_order_quantity, 'supplierItemCode', si.supplier_item_code, 'isActive', si.is_active) order by s.supplier_code, i.item_code), '[]'::jsonb) into payload
+    from public.supplier_uniform_items si join public.suppliers s on s.id = si.supplier_id join public.uniform_items i on i.id = si.item_id;
+  end if;
+  insert into public.master_export_batches (entity_type, payload, requested_by)
+  values (entity_type, payload, current_account) returning * into batch_row;
+  insert into public.master_export_events (batch_id, actor_account_id, event_type) values (batch_row.id, current_account, 'REQUESTED');
+  update public.operation_commands set status = 'SUCCEEDED', result_entity_type = 'master_export_batches', result_entity_id = batch_row.id, succeeded_at = now() where id = command_row.id;
+  return jsonb_build_object('batchId', batch_row.id, 'rows', payload);
+end;
+$$;
+
+create or replace function public.record_master_export_download(p_batch_id uuid)
+returns public.master_export_batches
+language plpgsql
+security definer
+set search_path = pg_catalog, private
+as $$
+declare
+  current_account uuid;
+  batch_row public.master_export_batches;
+begin
+  current_account := private.current_account_id();
+  if auth.uid() is null or coalesce(auth.jwt() ->> 'role', '') <> 'authenticated' or current_account is null then
+    raise exception using errcode = '42501', message = 'Authenticated account is required';
+  end if;
+  if not (private.has_role('HR') or private.has_role('PROCUREMENT')) then
+    raise exception using errcode = '42501', message = 'Role cannot record export download';
+  end if;
+  select * into batch_row from public.master_export_batches where id = p_batch_id for update;
+  if not found then raise exception 'Master export batch not found'; end if;
+  insert into public.master_export_events (batch_id, actor_account_id, event_type) values (batch_row.id, current_account, 'DOWNLOADED');
+  update public.master_export_batches set downloaded_at = coalesce(downloaded_at, now()), downloaded_by = coalesce(downloaded_by, current_account) where id = batch_row.id returning * into batch_row;
+  return batch_row;
+end;
+$$;
+
+revoke all on function public.export_master_data(text) from authenticated;
+revoke all on function public.export_master_data(text, text, text) from public, anon;
+revoke all on function public.record_master_export_download(uuid) from public, anon;
+grant execute on function public.export_master_data(text, text, text) to authenticated;
+grant execute on function public.record_master_export_download(uuid) to authenticated;

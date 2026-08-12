@@ -4,7 +4,7 @@
 
 ## 第一個可執行切片
 
-目前已接上 Next.js／TypeScript 試算介面、員工明細／品號彙總工作台、Supabase 登入面板、員工 CSV 安全預覽與主檔 JSON 匯入／匯出工作台：
+目前已接上 Next.js／TypeScript 試算介面、員工明細／品號彙總工作台、Supabase 登入面板、員工 CSV 安全預覽與主檔 CSV／JSON 匯入／匯出工作台：
 
 - `npm install` 安裝依賴。
 - `npm test` 執行 F/I/R/T/D 庫存規則與人資需求明細彙總測試。

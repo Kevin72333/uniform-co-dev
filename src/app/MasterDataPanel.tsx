@@ -23,6 +23,7 @@ export default function MasterDataPanel() {
     if (!file) return;
     setFileName(file.name);
     try {
+      if (file.size > 10_000_000) throw new Error("檔案超過 10 MB 上限");
       const text = await file.text();
       const result = file.name.toLowerCase().endsWith(".csv") ? parseMasterDataCsv(text) : parseMasterDataJson(text);
       if (result.errors.length > 0) throw new Error(`第 ${result.errors[0].row} 列：${result.errors[0].message}`);
@@ -60,13 +61,23 @@ export default function MasterDataPanel() {
       return;
     }
     setBusy(true);
-    const { data, error } = await client.rpc("export_master_data", { p_entity_type: entityType });
+    const exportKey = `master-export-${crypto.randomUUID()}`;
+    const { data, error } = await client.rpc("export_master_data", {
+      p_entity_type: entityType,
+      p_idempotency_key: exportKey,
+      p_request_fingerprint: `${entityType}:csv:v1`,
+    });
     setBusy(false);
     if (error) {
       setMessage(error.message);
       return;
     }
-    const exportRows = Array.isArray(data) ? data as Record<string, unknown>[] : [];
+    const exportPayload = data as { batchId?: string; rows?: unknown[] } | unknown[] | null;
+    const exportRows = Array.isArray(exportPayload)
+      ? exportPayload as Record<string, unknown>[]
+      : Array.isArray(exportPayload?.rows)
+        ? exportPayload.rows as Record<string, unknown>[]
+        : [];
     const blob = new Blob([masterRowsToCsv(exportRows)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -74,6 +85,9 @@ export default function MasterDataPanel() {
     anchor.download = `${entityType.toLowerCase()}-export.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+    if (!Array.isArray(exportPayload) && exportPayload?.batchId) {
+      await client.rpc("record_master_export_download", { p_batch_id: exportPayload.batchId });
+    }
     setMessage("匯出完成；下載事件應由後端／稽核流程另行記錄");
   }
 

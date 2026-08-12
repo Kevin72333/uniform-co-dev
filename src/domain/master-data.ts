@@ -10,6 +10,7 @@ export type MasterDataParseResult = {
 };
 
 const maxCellLength = 1_000_000;
+const maxImportBytes = 10_000_000;
 
 function parseCsvRows(input: string): { rows: string[][]; error?: string } {
   const rows: string[][] = [];
@@ -59,6 +60,7 @@ function isUnsafeCell(value: string): boolean {
 }
 
 export function parseMasterDataCsv(input: string, maxRows = 10_000, maxColumns = 50): MasterDataParseResult {
+  if (input.length > maxImportBytes) return { headers: [], rows: [], errors: [{ row: 1, message: `檔案超過 ${maxImportBytes} bytes 上限` }] };
   const parsed = parseCsvRows(input.replace(/^\uFEFF/, ""));
   if (parsed.error) return { headers: [], rows: [], errors: [{ row: 1, message: parsed.error }] };
   if (parsed.rows.length === 0) return { headers: [], rows: [], errors: [{ row: 1, message: "CSV 缺少標題列" }] };
@@ -92,17 +94,24 @@ export function parseMasterDataCsv(input: string, maxRows = 10_000, maxColumns =
 }
 
 export function parseMasterDataJson(input: string): MasterDataParseResult {
+  if (input.length > maxImportBytes) return { headers: [], rows: [], errors: [{ row: 1, message: `檔案超過 ${maxImportBytes} bytes 上限` }] };
   try {
     const parsed: unknown = JSON.parse(input);
     if (!Array.isArray(parsed) || parsed.length === 0 || parsed.some((row) => row === null || typeof row !== "object" || Array.isArray(row))) {
       return { headers: [], rows: [], errors: [{ row: 1, message: "JSON 必須是非空物件陣列" }] };
     }
     const rows = parsed as Record<string, unknown>[];
+    if (rows.length > 10_000) return { headers: [], rows: [], errors: [{ row: 1, message: "資料列超過上限 10000" }] };
     const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+    if (headers.length > 50) return { headers, rows: [], errors: [{ row: 1, message: "欄位數超過上限 50" }] };
     const resultRows: Record<string, string>[] = [];
     const errors: MasterDataParseError[] = [];
     rows.forEach((row, index) => {
       const normalized = Object.fromEntries(headers.map((header) => [header, row[header] == null ? "" : String(row[header])]));
+      if (Object.values(normalized).some((value) => value.length > maxCellLength)) {
+        errors.push({ row: index + 1, message: `儲存格超過 ${maxCellLength} 字元上限` });
+        return;
+      }
       if (Object.values(normalized).some(isUnsafeCell)) {
         errors.push({ row: index + 1, message: "拒絕含有公式或外部連結前綴的儲存格" });
         return;

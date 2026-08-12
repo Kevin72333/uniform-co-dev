@@ -22,4 +22,9 @@ describe("master data file safety", () => {
   it("normalizes JSON rows into string fields", () => {
     expect(parseMasterDataJson('[{"code":"001","active":true}]').rows).toEqual([{ code: "001", active: "true" }]);
   });
+
+  it("rejects oversized JSON before normalizing rows", () => {
+    const result = parseMasterDataJson(`[${JSON.stringify({ code: "x".repeat(10_000_001) })}]`);
+    expect(result.errors[0].message).toContain("bytes");
+  });
 });
