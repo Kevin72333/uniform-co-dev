@@ -95,3 +95,7 @@ Production 執行前要先備份、確認目前 migration version、在 staging 
 Durable import worker deployment also applies `0046_import_chunk_split_forward.sql`, `0047_import_worker_confirmation_actor.sql`, and `0048_import_upload_failure.sql`; the worker confirms uploads, reuses immutable master snapshots, processes bounded chunks, and durably marks definitive parser failures. Claim keys are generated per lease attempt, while the database worker role and actor binding remain fixed.
 
 `0050_return_correction.sql` 套用後，HR 可從已 POST 退回明細建立 RETURN correction；只有受保護 `create_return_correction_draft`／`post_return_correction` RPC 能寫入，POST 會鎖原退回單、原發放明細、品號 mutex、兩倉餘額及必要的預留集合，重算有效退回量並以本次 delta 調整人資倉。`ReturnCorrectionPanel` 以同一冪等鍵查回建立／POST 結果，展示已 POST 歷史；staging 必須驗證同一原發放明細的退回、退回更正並行時只有鎖後仍合法者成功。
+
+`0051_hr_issue_correction.sql` 套用後，HR 可從已 SHIPPED 發放明細建立 HR_ISSUE correction；只有 `create_hr_issue_correction_draft`／`post_hr_issue_correction` RPC 能寫入，正數補登會扣 HR 倉、負數沖回會回補 HR 倉，且鎖內重算 effective issued、已退回量與 active reservations。`HrIssueCorrectionPanel` 保留操作鍵與歷史，staging 必須驗證 HR_ISSUE、RETURN、RETURN correction 對同一原發放明細並行時的來源鎖與數量上限。
+
+`0052_correction_source_advisory.sql` 需在 0050、0051 後套用；它以同一 HR request 的 transaction advisory lock 統一不同品號的人資發放／退回更正，staging 應驗證並行交易不形成 item-mutex／需求列死結，失敗者以 40001 重試。

@@ -54,3 +54,7 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`：reference sna
 `0049_receipt_correction_reconciliation.sql` 是採購入庫更正的 forward fix：更正 POST 會以本次 delta 過帳、在鎖內重算有效數量與採購配置，必要時將不足預留轉為衝突並記錄 PO 重開原因；更正狀態查詢 RPC 支援瀏覽器回應遺失後恢復。實際 Supabase 交易／鎖序仍需 staging smoke 驗證。
 
 `0050_return_correction.sql` 補齊退回更正：以原退回明細與原發放明細為不可變來源，於共同品號／來源鎖內重算有效退回量，調整人資倉、處理預留衝突並提供 draft／POST／狀態查回 RPC；退回更正工作台保留歷史與 response-loss recovery。實際 SQL／RLS／並行交易仍需 staging smoke 驗證。
+
+`0051_hr_issue_correction.sql` 補齊 HR_ISSUE 更正：以已 SHIPPED 的原發放明細為唯一來源，保存不可變員工／品號快照，正負差額只透過 HR 倉庫受保護 RPC 過帳；POST 會在共同品號、需求、原明細與兩倉餘額鎖內重算有效發放／退回上限、拒絕突破有效預留與負庫存，並提供狀態查回與 HR 工作台。實際 SQL／RLS／並行交易仍需 staging smoke 驗證。
+
+`0052_correction_source_advisory.sql` 將 HR_ISSUE、RETURN 與 RETURN correction 對同一人資需求的來源更正共用 advisory fence，避免不同品號更正各自持有 item mutex 後互等需求列；staging 必須以同一需求的不同品號並行 POST 驗證可重試且不死結。
