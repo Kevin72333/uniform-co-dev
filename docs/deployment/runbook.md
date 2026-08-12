@@ -117,3 +117,5 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 `0064_reporting_receipt_aggregation.sql` 必須在 0063 後套用；它只替換報表 view，不回寫採購或入庫資料，並先按原始 receipt line 合併已 POSTED 更正，再按 purchase order line 計算 effective delivered／accepted／rejected。staging 應建立同一 PO line 的兩張以上 POSTED 入庫單及一筆更正，確認報表數量等於各筆有效數量總和而非被入庫張數倍增。
 
 `0065_inventory_history_source_number.sql` 必須在 0063／0064 後套用；它只替換 `v_inventory_history`，依 posting kind 解析來源單號（發貨、補庫、入庫、盤點、退回、更正、期初），不改動流水。staging 應確認報表同時顯示可讀來源單號與不可變 `source_entity_id`。
+
+`0066_inventory_history_source_acl.sql` 必須在 0065 後套用；它只對 `opening_posting_sources`／`correction_posting_sources` 授予 authenticated SELECT，且 RLS 限 HR／WAREHOUSE，沒有任何 INSERT／UPDATE／DELETE。staging 應確認 HR／WAREHOUSE 可讀流水來源單號，其他角色不因該映射表 grant 擴大庫存歷史可見範圍。
