@@ -51,8 +51,8 @@ declare
   row_value jsonb;
   entity_type text := upper(btrim(coalesce(p_entity_type, '')));
   row_no integer := 1;
-  row_count integer := 0;
-  error_count integer := 0;
+  import_row_count integer := 0;
+  import_error_count integer := 0;
   code text;
   name text;
   unit text;
@@ -73,6 +73,7 @@ begin
   end if;
   if entity_type not in ('INSTITUTIONS', 'DEPARTMENTS', 'UNIFORM_ITEMS', 'SUPPLIERS', 'SUPPLIER_ITEMS')
      or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0
+     or jsonb_array_length(p_rows) > 10000
      or btrim(coalesce(p_idempotency_key, '')) = '' or btrim(coalesce(p_request_fingerprint, '')) = '' then
     raise exception 'Master import fields are invalid';
   end if;
@@ -93,7 +94,7 @@ begin
   values (entity_type, left(nullif(btrim(p_source_filename), ''), 255), current_account)
   returning * into batch_row;
   for row_value in select value from jsonb_array_elements(p_rows) loop
-    row_no := row_no + 1; row_count := row_count + 1; error_code := null; error_message := null;
+    row_no := row_no + 1; import_row_count := import_row_count + 1; error_code := null; error_message := null;
     code := btrim(coalesce(row_value ->> case when entity_type = 'SUPPLIERS' then 'supplierCode' else 'code' end, ''));
     name := btrim(coalesce(row_value ->> 'name', ''));
     unit := btrim(coalesce(row_value ->> 'unit', ''));
@@ -105,6 +106,29 @@ begin
     if coalesce(row_value ->> 'minimumOrderQuantity', '') ~ '^[0-9]{1,18}$' then minimum_order_quantity := (row_value ->> 'minimumOrderQuantity')::bigint; end if;
     if row_value ? 'isActive' and lower(coalesce(row_value ->> 'isActive', '')) not in ('true', 'false') then
       error_code := 'INVALID_BOOLEAN'; error_message := 'isActive 必須是 true 或 false';
+    end if;
+    if error_code is null and (
+      code ~ '^[=+@-]' or name ~ '^[=+@-]' or unit ~ '^[=+@-]' or
+      institution_code ~ '^[=+@-]' or department_code ~ '^[=+@-]' or
+      supplier_code ~ '^[=+@-]' or item_code ~ '^[=+@-]' or
+      btrim(coalesce(row_value ->> 'supplierItemCode', '')) ~ '^[=+@-]' or
+      btrim(coalesce(row_value ->> 'defaultCurrency', '')) ~ '^[=+@-]' or
+      btrim(coalesce(row_value ->> 'size', '')) ~ '^[=+@-]' or
+      position(chr(9) in code) > 0 or position(chr(13) in code) > 0 or
+      position(chr(9) in name) > 0 or position(chr(13) in name) > 0 or
+      position(chr(9) in unit) > 0 or position(chr(13) in unit) > 0 or
+      position(chr(9) in institution_code) > 0 or position(chr(13) in institution_code) > 0 or
+      position(chr(9) in department_code) > 0 or position(chr(13) in department_code) > 0 or
+      position(chr(9) in supplier_code) > 0 or position(chr(13) in supplier_code) > 0 or
+      position(chr(9) in item_code) > 0 or position(chr(13) in item_code) > 0 or
+      position(chr(9) in btrim(coalesce(row_value ->> 'supplierItemCode', ''))) > 0 or
+      position(chr(13) in btrim(coalesce(row_value ->> 'supplierItemCode', ''))) > 0 or
+      position(chr(9) in btrim(coalesce(row_value ->> 'defaultCurrency', ''))) > 0 or
+      position(chr(13) in btrim(coalesce(row_value ->> 'defaultCurrency', ''))) > 0 or
+      position(chr(9) in btrim(coalesce(row_value ->> 'size', ''))) > 0 or
+      position(chr(13) in btrim(coalesce(row_value ->> 'size', ''))) > 0
+    ) then
+      error_code := 'UNSAFE_TEXT'; error_message := '識別欄與文字欄不可含公式前綴、Tab 或換行';
     end if;
     if entity_type = 'INSTITUTIONS' then
       if code = '' or name = '' then error_code := 'EMPTY_REQUIRED'; error_message := '機構代碼與名稱不可空白'; end if;
@@ -131,12 +155,12 @@ begin
     if error_code is null then
       insert into public.master_import_rows (batch_id, row_number, raw_values, status) values (batch_row.id, row_no, row_value, 'VALIDATED');
     else
-      error_count := error_count + 1;
+      import_error_count := import_error_count + 1;
       insert into public.master_import_rows (batch_id, row_number, raw_values, status, error_code, error_message) values (batch_row.id, row_no, row_value, 'ERROR', error_code, error_message);
     end if;
   end loop;
-  update public.master_import_batches set row_count = row_count, error_count = error_count, status = case when error_count = 0 then 'APPLIED' else 'FAILED' end, completed_at = now(), error_message = case when error_count = 0 then null else 'Master import contains validation errors' end where id = batch_row.id returning * into batch_row;
-  if error_count > 0 then
+  update public.master_import_batches set row_count = import_row_count, error_count = import_error_count, status = case when import_error_count = 0 then 'APPLIED' else 'FAILED' end, completed_at = now(), error_message = case when import_error_count = 0 then null else 'Master import contains validation errors' end where id = batch_row.id returning * into batch_row;
+  if import_error_count > 0 then
     update public.operation_commands set status = 'RETRYABLE_FAILED', result_entity_type = 'master_import_batches', result_entity_id = batch_row.id, last_error_code = 'VALIDATION_FAILED' where id = command_row.id;
     return batch_row;
   end if;

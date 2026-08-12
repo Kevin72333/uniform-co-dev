@@ -135,7 +135,7 @@ declare
   family_row public.document_artifact_families;
   artifact_row public.document_artifacts;
   next_revision integer;
-  family_id uuid;
+  document_family_id uuid;
 begin
   current_account := private.current_account_id();
   if auth.uid() is null or coalesce(auth.jwt() ->> 'role', '') <> 'authenticated' or current_account is null then
@@ -172,32 +172,32 @@ begin
     end if;
     raise exception using errcode = '40001', message = 'PDF artifact request is already in progress or failed';
   end if;
-  select id into family_id from public.document_artifact_families
+  select id into document_family_id from public.document_artifact_families
   where document_type = p_document_type and document_id = p_document_id and artifact_kind = 'PDF'
   for update;
-  if family_id is null then
+  if document_family_id is null then
     insert into public.document_artifact_families (
       document_type, document_id, artifact_kind, source_snapshot_version, source_snapshot_hash
     ) values (
       p_document_type, p_document_id, 'PDF', p_source_snapshot_version, p_source_snapshot_hash
-    ) returning id into family_id;
+    ) returning id into document_family_id;
   else
-    select * into family_row from public.document_artifact_families where id = family_id;
+    select * into family_row from public.document_artifact_families where id = document_family_id;
     if family_row.source_snapshot_version <> p_source_snapshot_version or family_row.source_snapshot_hash <> p_source_snapshot_hash then
       raise exception 'PDF source snapshot does not match the document family';
     end if;
   end if;
-  if exists (select 1 from public.document_artifacts where family_id = family_id and status = 'PREPARING') then
+  if exists (select 1 from public.document_artifacts da where da.family_id = document_family_id and da.status = 'PREPARING') then
     raise exception using errcode = '40001', message = 'Another PDF revision is active';
   end if;
-  select coalesce(max(revision), 0) + 1 into next_revision from public.document_artifacts where family_id = family_id;
+  select coalesce(max(da.revision), 0) + 1 into next_revision from public.document_artifacts da where da.family_id = document_family_id;
   insert into public.document_artifacts (
     family_id, revision, status, idempotency_key, request_fingerprint, template_version,
     source_snapshot_version, source_snapshot_hash, supersedes_artifact_id
   ) values (
-    family_id, next_revision, 'PREPARING', p_idempotency_key, p_request_fingerprint,
+    document_family_id, next_revision, 'PREPARING', p_idempotency_key, p_request_fingerprint,
     left(btrim(p_template_version), 80), p_source_snapshot_version, p_source_snapshot_hash,
-    (select id from public.document_artifacts where family_id = family_id and status = 'READY' and is_current limit 1)
+    (select da.id from public.document_artifacts da where da.family_id = document_family_id and da.status = 'READY' and da.is_current limit 1)
   ) returning * into artifact_row;
   insert into public.document_render_attempts (artifact_id, attempt_no, attempt_key)
   values (artifact_row.id, 1, p_idempotency_key || ':attempt:1');

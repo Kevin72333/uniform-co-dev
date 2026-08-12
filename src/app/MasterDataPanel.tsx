@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
+import { masterRowsToCsv, parseMasterDataCsv, parseMasterDataJson } from "@/src/domain/master-data";
 
 const entityOptions = [
   ["INSTITUTIONS", "機構"],
@@ -22,10 +23,11 @@ export default function MasterDataPanel() {
     if (!file) return;
     setFileName(file.name);
     try {
-      const parsed: unknown = JSON.parse(await file.text());
-      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("JSON 必須是非空陣列");
-      setRows(parsed);
-      setMessage(`已預覽 ${parsed.length} 列；尚未寫入資料庫`);
+      const text = await file.text();
+      const result = file.name.toLowerCase().endsWith(".csv") ? parseMasterDataCsv(text) : parseMasterDataJson(text);
+      if (result.errors.length > 0) throw new Error(`第 ${result.errors[0].row} 列：${result.errors[0].message}`);
+      setRows(result.rows);
+      setMessage(`已預覽 ${result.rows.length} 列；尚未寫入資料庫`);
     } catch (error) {
       setRows([]);
       setMessage(error instanceof Error ? error.message : "JSON 無法解析");
@@ -64,11 +66,12 @@ export default function MasterDataPanel() {
       setMessage(error.message);
       return;
     }
-    const blob = new Blob([JSON.stringify(data ?? [], null, 2)], { type: "application/json" });
+    const exportRows = Array.isArray(data) ? data as Record<string, unknown>[] : [];
+    const blob = new Blob([masterRowsToCsv(exportRows)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${entityType.toLowerCase()}-export.json`;
+    anchor.download = `${entityType.toLowerCase()}-export.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
     setMessage("匯出完成；下載事件應由後端／稽核流程另行記錄");
@@ -92,8 +95,8 @@ export default function MasterDataPanel() {
           </select>
         </label>
         <label className="file-picker">
-          <span>選擇 JSON</span>
-          <input type="file" accept="application/json,.json" onChange={(event) => void handleFile(event.target.files?.[0])} />
+          <span>選擇 CSV／JSON</span>
+          <input type="file" accept="text/csv,.csv,application/json,.json" onChange={(event) => void handleFile(event.target.files?.[0])} />
         </label>
       </div>
       {fileName ? <p className="file-name">{fileName}／{rows.length} 列</p> : null}
