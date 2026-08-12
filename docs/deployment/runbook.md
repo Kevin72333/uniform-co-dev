@@ -107,3 +107,5 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 `0055_stocktake_correction.sql` 套用後，HR／WAREHOUSE 可從各自允許的已 POST 盤點明細建立更正；`post_stocktake_correction` 會鎖盤點、明細、品號、兩倉餘額及受影響預留，將不足覆蓋的需求轉為 `INVENTORY_REVIEW_REQUIRED` 後再完成更正流水。staging 必須驗證盤點差額、角色、負庫存、預留衝突與同 key 查回。
 
 `0057_correction_source_immutability_forward.sql` 必須在 0055 後套用；它只替換既有 trigger function，不改寫業務資料，並將 `original_stocktake_id` 納入 DRAFT／POSTED 更正來源不可變檢查。staging 應嘗試修改盤點更正來源並確認被拒絕。
+
+`0059_receipt_correction_lockset_forward.sql` 必須在 0049 後套用；它在採購入庫更正處理預留衝突前重驗需求／品號集合，集合變動時以 40001 讓 caller 重試，避免跨品號更正持有部分鎖集合。

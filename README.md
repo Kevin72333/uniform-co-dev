@@ -66,3 +66,5 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`、`005
 `0055_stocktake_correction.sql` 補齊 STOCKTAKE 更正：以已 POST 盤點明細為不可變基線，保存 signed counted delta，於盤點倉／兩倉餘額與 active reservations 鎖內重算有效實盤；若更正使預留失去覆蓋，仍完成盤點更正流水並同交易標記相關需求 `INVENTORY_REVIEW_REQUIRED`。
 
 `0057_correction_source_immutability_forward.sql` 將更正來源不可變 trigger forward-fix 到已套用 0055 的環境，納入盤點更正的 `original_stocktake_id`，避免已部署資料庫只套用舊 trigger 而漏掉盤點來源欄位。
+
+`0059_receipt_correction_lockset_forward.sql` 在採購入庫更正調整庫存／預留前再次核對完整需求 reservation lock set；若並行交易在 item mutex 後新增其他品項預留，交易以 40001 重試而不使用部分集合。
