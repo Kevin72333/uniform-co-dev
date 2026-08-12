@@ -22,6 +22,7 @@ import PdfArtifactPanel from "./PdfArtifactPanel";
 import ErpExportPanel from "./ErpExportPanel";
 import AccountAdminPanel from "./AccountAdminPanel";
 import DurableImportPanel from "./DurableImportPanel";
+import ReportingPanel from "./ReportingPanel";
 
 export default function Home() {
   return (
@@ -38,6 +39,7 @@ export default function Home() {
       </header>
       <AuthPanel />
       <AccountAdminPanel />
+      <ReportingPanel />
       <InventoryCalculator />
       <HrRequestWorkbench />
       <EmployeeImportPanel />

@@ -89,6 +89,11 @@ dd { font-size: 20px; font-weight: 800; margin: 0; }
 .admin-account-row small { color: var(--muted); display: block; font-size: 12px; margin-top: 4px; }
 .admin-controls { margin-top: 20px; }
 .durable-import-status { margin-top: 12px; }
+.table-scroll { border: 1px solid var(--line); border-radius: 14px; margin-top: 18px; max-height: 520px; overflow: auto; }
+.table-scroll table { border-collapse: collapse; font-size: 12px; min-width: 100%; white-space: nowrap; }
+.table-scroll th, .table-scroll td { border-bottom: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+.table-scroll th { background: #f0f5ef; color: var(--muted); position: sticky; top: 0; z-index: 1; }
+.empty-state { color: var(--muted); margin: 18px 0 0; }
 .sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 @media (max-width: 820px) { .hero, .workspace { display: block; } .hero .status-pill { margin-top: 12px; } .panel { margin-top: 20px; } }
 @media (max-width: 820px) { .request-workbench { display: block; } .request-table-row { grid-template-columns: 1.1fr 1fr .45fr auto; } }
