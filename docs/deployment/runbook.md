@@ -20,6 +20,8 @@
 
 Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `create_hr_request_draft` 建立完整快照草稿，再呼叫 `submit_hr_request`；倉庫可用 `create_warehouse_shipment_draft` 建立待 POST 發貨草稿。若 migration 尚未套用，畫面會保留預覽模式並顯示 RPC 錯誤，不會假稱已送出。
 
+`0015_draft_creation_rpc.sql` 也提供 `create_replenishment_draft`；人資可從額外補庫工作台建立不預留庫存的補庫單，再由 `submit_replenishment_request` 送出，倉庫以 `post_replenishment_request` 依總倉現有庫存調庫。`0016_employee_import_guard.sql` 將員工 CSV 匯入改由 `apply_employee_import_checked` 原子套用，資料庫端也會重驗檔案大小、列數、欄數與儲存格長度，重試沿用相同冪等鍵。
+
 本機目前無 Docker／Postgres，因此 `supabase db lint --local` 只能在具備 Docker 的維運環境執行；本機已通過 app test、lint、typecheck、build，但不把它當成 SQL/RLS 整合驗收。
 
 ## Vercel

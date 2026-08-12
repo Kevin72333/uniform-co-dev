@@ -27,4 +27,11 @@ describe("employee CSV import preview", () => {
     expect(result.errors[0].code).toBe("FORMULA_CELL");
     expect(result.rows).toEqual([]);
   });
+
+  it("rejects unterminated quoted cells", () => {
+    const result = parseEmployeeCsv(
+      'employee_no,name,institution_code,department_code,employment_status\nE001,A,ABC,A,"ACTIVE\n',
+    );
+    expect(result.errors.some((error) => error.code === "MALFORMED_CSV")).toBe(true);
+  });
 });

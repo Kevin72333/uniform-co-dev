@@ -8,7 +8,7 @@ export type EmployeeImportRow = {
 
 export type EmployeeImportError = {
   row: number;
-  code: "MISSING_HEADER" | "INVALID_COLUMN_COUNT" | "EMPTY_REQUIRED" | "DUPLICATE_EMPLOYEE_NO" | "INVALID_STATUS" | "FORMULA_CELL";
+  code: "MISSING_HEADER" | "INVALID_COLUMN_COUNT" | "EMPTY_REQUIRED" | "DUPLICATE_EMPLOYEE_NO" | "INVALID_STATUS" | "FORMULA_CELL" | "MALFORMED_CSV";
   message: string;
 };
 
@@ -26,7 +26,7 @@ const requiredHeaders = [
   "employment_status",
 ] as const;
 
-function parseCsvRows(input: string): string[][] {
+function parseCsvRows(input: string): { rows: string[][]; malformed: boolean } {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -62,7 +62,7 @@ function parseCsvRows(input: string): string[][] {
     row.push(cell.replace(/\r$/, ""));
     rows.push(row);
   }
-  return rows.filter((candidate) => candidate.some((value) => value.trim() !== ""));
+  return { rows: rows.filter((candidate) => candidate.some((value) => value.trim() !== "")), malformed: quoted };
 }
 
 function isFormulaCell(value: string): boolean {
@@ -70,14 +70,21 @@ function isFormulaCell(value: string): boolean {
 }
 
 export function parseEmployeeCsv(input: string, maxRows = 10_000): EmployeeImportResult {
+  if (input.length > 10_000_000) {
+    return { headers: [], rows: [], errors: [{ row: 1, code: "INVALID_COLUMN_COUNT", message: "檔案超過 10 MB 上限" }] };
+  }
   const csv = input.replace(/^\uFEFF/, "");
-  const parsedRows = parseCsvRows(csv);
+  const parsedResult = parseCsvRows(csv);
+  const parsedRows = parsedResult.rows;
   if (parsedRows.length === 0) {
     return { headers: [], rows: [], errors: [{ row: 1, code: "MISSING_HEADER", message: "CSV 缺少標題列" }] };
   }
 
   const headers = parsedRows[0].map((header) => header.trim().toLowerCase());
   const errors: EmployeeImportError[] = [];
+  if (parsedResult.malformed) {
+    errors.push({ row: 1, code: "MALFORMED_CSV", message: "CSV 含有未閉合的引號" });
+  }
   const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
   for (const header of missingHeaders) {
     errors.push({ row: 1, code: "MISSING_HEADER", message: `缺少必要欄位 ${header}` });
