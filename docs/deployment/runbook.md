@@ -92,7 +92,7 @@ Production 執行前要先備份、確認目前 migration version、在 staging 
 - 發現 migration／RLS 不一致先停止正式 cutover，不刪除正式 ledger 或 READY artifact。
 - 備份／還原與 offsite credentials 尚未配置前，不宣稱 AC-38 或 production RPO/RTO 已通過。
 
-Durable import worker deployment also applies `0046_import_chunk_split_forward.sql`, `0047_import_worker_confirmation_actor.sql`, and `0048_import_upload_failure.sql`; the worker confirms uploads, reuses immutable master snapshots, processes bounded chunks, and durably marks definitive parser failures. Claim keys are generated per lease attempt, while the database worker role and actor binding remain fixed.
+Durable import worker deployment also applies `0046_import_chunk_split_forward.sql`, `0047_import_worker_confirmation_actor.sql`, `0048_import_upload_failure.sql`, and `0056_import_worker_actor_forward.sql`; the worker confirms uploads, reuses immutable master snapshots, processes bounded chunks, and durably marks definitive parser failures. `0056` separates the dedicated worker execution actor from the original uploader attribution, so the worker can confirm the object without impersonating the user who uploaded it. Claim keys are generated per lease attempt, while the database worker role and actor binding remain fixed.
 
 `0050_return_correction.sql` 套用後，HR 可從已 POST 退回明細建立 RETURN correction；只有受保護 `create_return_correction_draft`／`post_return_correction` RPC 能寫入，POST 會鎖原退回單、原發放明細、品號 mutex、兩倉餘額及必要的預留集合，重算有效退回量並以本次 delta 調整人資倉。`ReturnCorrectionPanel` 以同一冪等鍵查回建立／POST 結果，展示已 POST 歷史；staging 必須驗證同一原發放明細的退回、退回更正並行時只有鎖後仍合法者成功。
 
@@ -105,3 +105,5 @@ Durable import worker deployment also applies `0046_import_chunk_split_forward.s
 `0054_warehouse_transfer_correction.sql` 套用後，WAREHOUSE 可從已 POST 發貨或 SHIPPED 補庫明細建立更正；`post_warehouse_transfer_correction` 會鎖來源與品號、重算有效調撥量及兩倉餘額，並以同一 operation key 查回結果。staging 必須驗證正負差額、上限、負庫存、同品號並行鎖與跨來源 response-loss recovery。
 
 `0055_stocktake_correction.sql` 套用後，HR／WAREHOUSE 可從各自允許的已 POST 盤點明細建立更正；`post_stocktake_correction` 會鎖盤點、明細、品號、兩倉餘額及受影響預留，將不足覆蓋的需求轉為 `INVENTORY_REVIEW_REQUIRED` 後再完成更正流水。staging 必須驗證盤點差額、角色、負庫存、預留衝突與同 key 查回。
+
+`0057_correction_source_immutability_forward.sql` 必須在 0055 後套用；它只替換既有 trigger function，不改寫業務資料，並將 `original_stocktake_id` 納入 DRAFT／POSTED 更正來源不可變檢查。staging 應嘗試修改盤點更正來源並確認被拒絕。

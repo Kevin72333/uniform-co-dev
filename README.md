@@ -35,7 +35,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [ADR：人資送單預留、倉庫發貨過帳](./docs/adr/0003-reserve-before-warehouse-posting.md)
 - [部署與同步 Runbook](./docs/deployment/runbook.md)
 
-Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，最後提供 definitive parser failure 狀態轉換。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
+Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048` → `0056`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，提供 definitive parser failure 狀態轉換，最後讓受控 `job_import_worker` 確認由使用者上傳的 object（保留原 uploader attribution）並進入解析。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
 
 ## 尚待提供
 
@@ -49,7 +49,7 @@ Durable import worker 的 forward migration 順序為 `0045` → `0046` → `004
 
 可立即依[實作路線圖](./docs/implementation/roadmap.md)開始第 0 階段蒐集與技術驗證。鼎新樣本阻擋第 4 階段驗收；主檔與期初樣本阻擋第 5 階段切換；列印樣式、帳號清單、備份還原與三年容量 gate 則分別阻擋文件、使用者及正式上線驗收。
 
-Durable import worker 的 forward migrations 為 `0045`–`0048`：reference snapshot、bounded chunks、worker/uploader actor separation，以及 malformed-upload failure 都已納入；實際 Supabase/RLS/Storage smoke 仍需受保護 staging worker 執行。
+Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`：reference snapshot、bounded chunks、worker/uploader actor separation、malformed-upload failure，以及受控 worker 對上傳物件的確認都已納入；實際 Supabase/RLS/Storage smoke 仍需受保護 staging worker 執行。
 
 `0049_receipt_correction_reconciliation.sql` 是採購入庫更正的 forward fix：更正 POST 會以本次 delta 過帳、在鎖內重算有效數量與採購配置，必要時將不足預留轉為衝突並記錄 PO 重開原因；更正狀態查詢 RPC 支援瀏覽器回應遺失後恢復。實際 Supabase 交易／鎖序仍需 staging smoke 驗證。
 
@@ -64,3 +64,5 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`：reference sna
 `0054_warehouse_transfer_correction.sql` 補齊 WAREHOUSE_TRANSFER 更正：已 POST 發貨／補庫明細可建立 signed transfer delta，POST 在品號、來源文件／明細與兩倉餘額鎖內重算有效調撥上限，原子新增 GENERAL 出庫與 HR 入庫流水，並提供狀態查回與 WAREHOUSE 工作台。
 
 `0055_stocktake_correction.sql` 補齊 STOCKTAKE 更正：以已 POST 盤點明細為不可變基線，保存 signed counted delta，於盤點倉／兩倉餘額與 active reservations 鎖內重算有效實盤；若更正使預留失去覆蓋，仍完成盤點更正流水並同交易標記相關需求 `INVENTORY_REVIEW_REQUIRED`。
+
+`0057_correction_source_immutability_forward.sql` 將更正來源不可變 trigger forward-fix 到已套用 0055 的環境，納入盤點更正的 `original_stocktake_id`，避免已部署資料庫只套用舊 trigger 而漏掉盤點來源欄位。
