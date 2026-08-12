@@ -5,7 +5,7 @@
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'job_import_worker') then
-    execute 'create role job_import_worker noinherit nologin';
+    execute 'create role job_import_worker login noinherit';
   end if;
 end;
 $$;

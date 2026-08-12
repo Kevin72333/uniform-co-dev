@@ -1,6 +1,14 @@
 -- Append-only audit and storage archive controls.
 -- This is a forward migration: do not edit already-applied migrations.
 
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'job_storage_cleanup') then
+    execute 'create role job_storage_cleanup login noinherit';
+  end if;
+end;
+$$;
+
 alter table public.master_import_batches
   add column if not exists storage_object_key text,
   add column if not exists file_sha256 text;
@@ -132,21 +140,32 @@ as $$
 declare
   actor_id uuid;
 begin
-  actor_id := coalesce(new.actor_account_id, old.actor_account_id, private.current_account_id());
-  if actor_id is not null then
-    perform private.append_audit_event(
-      actor_id,
-      case when tg_op = 'INSERT' then 'COMMAND_CREATED' else 'COMMAND_STATUS_CHANGED' end,
-      'operation_commands',
-      coalesce(new.id, old.id),
-      case when tg_op = 'INSERT' then null else to_jsonb(old) end,
-      to_jsonb(new),
-      null,
-      coalesce(new.id, old.id),
-      null,
-      jsonb_build_object('operation_code', coalesce(new.operation_code, old.operation_code))
-    );
+  if tg_op = 'INSERT' then
+    actor_id := coalesce(new.actor_account_id, private.current_account_id());
+  elsif tg_op = 'DELETE' then
+    actor_id := coalesce(old.actor_account_id, private.current_account_id());
+  else
+    actor_id := coalesce(new.actor_account_id, old.actor_account_id, private.current_account_id());
   end if;
+  if actor_id is not null then
+    if tg_op = 'INSERT' then
+      perform private.append_audit_event(
+        actor_id, 'COMMAND_CREATED', 'operation_commands', new.id, null, to_jsonb(new), null,
+        new.id, null, jsonb_build_object('operation_code', new.operation_code)
+      );
+    elsif tg_op = 'DELETE' then
+      perform private.append_audit_event(
+        actor_id, 'COMMAND_DELETED', 'operation_commands', old.id, to_jsonb(old), null, null,
+        old.id, null, jsonb_build_object('operation_code', old.operation_code)
+      );
+    else
+      perform private.append_audit_event(
+        actor_id, 'COMMAND_STATUS_CHANGED', 'operation_commands', new.id, to_jsonb(old), to_jsonb(new), null,
+        new.id, null, jsonb_build_object('operation_code', new.operation_code)
+      );
+    end if;
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
   return new;
 end;
 $$;
@@ -173,7 +192,11 @@ begin
     end if;
     return new;
   end if;
-  row_id := coalesce(new.id, old.id);
+  if tg_op = 'DELETE' then
+    row_id := old.id;
+  else
+    row_id := new.id;
+  end if;
   perform private.append_audit_event(
     actor_id,
     upper(tg_table_name) || '_' || lower(tg_op),
@@ -451,8 +474,14 @@ grant select on public.audit_events, public.storage_archive_records,
   public.storage_object_lifecycle_events to authenticated;
 revoke all on function private.append_audit_event(uuid, text, text, uuid, jsonb, jsonb, text, uuid, text, jsonb) from public, anon, authenticated;
 -- These two functions are intentionally not exposed to authenticated users.
--- After provisioning a NOLOGIN/job-specific `job_storage_cleanup` role, grant
+-- After provisioning the job-specific `job_storage_cleanup` role, grant
 -- EXECUTE only to that role and keep the worker's Storage Admin credential out
 -- of the browser. Until then, archive/lifecycle writes fail closed.
 revoke all on function public.finalize_storage_archive(text, uuid, text, text, text, text, text, text, timestamptz, uuid, text, text) from public, anon, authenticated;
 revoke all on function public.record_storage_lifecycle_event(uuid, text, jsonb, uuid, text, text) from public, anon, authenticated;
+do $$
+begin
+  execute 'grant execute on function public.finalize_storage_archive(text, uuid, text, text, text, text, text, text, timestamptz, uuid, text, text) to job_storage_cleanup';
+  execute 'grant execute on function public.record_storage_lifecycle_event(uuid, text, jsonb, uuid, text, text) to job_storage_cleanup';
+end;
+$$;
