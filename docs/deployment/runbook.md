@@ -26,6 +26,8 @@ Migration `0015_draft_creation_rpc.sql` 套用後，人資工作台會透過 `cr
 
 本機目前無 Docker／Postgres，因此 `supabase db lint --local` 只能在具備 Docker 的維運環境執行；本機已通過 app test、lint、typecheck、build，但不把它當成 SQL/RLS 整合驗收。
 
+`0031_audit_archive_controls.sql` 會把主要業務資料異動寫入 append-only `audit_events`，並建立 archive/lifecycle metadata；封存 finalize 與移除／還原事件只接受 `job_storage_cleanup`。`0032_durable_import_foundation.sql` 會建立 `job_import_worker`（NOLOGIN）與固定 `uniform-imports` bucket/key 的 upload batch；`confirm_import_upload` 只有該 job role 可執行，且必須先在 Storage object metadata 寫入並核對 MIME／size／SHA-256。部署時要由受保護 worker 使用 Storage Admin read-back 後再呼叫，不能把 service role 或 worker role 暴露給瀏覽器。
+
 備份／還原固定入口已納入版本庫：`scripts/backup/export-db.sh` 以 protected `SUPABASE_DB_URL` 匯出 `public`／`private` application dump，`scripts/backup/export-auth.sh` 以 data-only dump 保留 Auth UUID／identities／MFA factors，`scripts/backup/export-storage.mjs` 只處理程式固定 allowlist（`uniform-imports`、`uniform-artifacts`、`uniform-render-temp`）中的 private objects，並由 `scripts/backup/create-manifest.mjs` 建立 SHA-256 manifest。從零還原使用 `scripts/restore/restore-from-zero.sh`，需要明確 `CONFIRM_RESTORE=YES`、`BACKUP_DECRYPT_COMMAND`（雙人程序在受保護 staging 解密 application/Auth dump）、新目標資料庫及 Storage Admin credentials，最後執行 `scripts/restore/verify.sql`。GitHub Actions 的 `.github/workflows/backup.yml` 目前刻意只能手動執行；必須先在受保護 environment 設定 `BACKUP_ENCRYPT_COMMAND`（加密並刪除兩份明文 dump）、`BACKUP_OFFSITE_COMMAND`、加密金鑰與雙人保管資料，才可考慮排程，不宣稱 AC-38／RPO/RTO 已通過。
 
 ## Vercel
