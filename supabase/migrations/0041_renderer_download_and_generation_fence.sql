@@ -29,7 +29,7 @@ security definer
 set search_path = pg_catalog, private
 as $$
 begin
-  if current_user <> 'job_renderer_storage_proxy' or session_user <> current_user
+  if session_user <> 'job_renderer_storage_proxy'
      or p_object_key is null or p_object_key like '%..%' or left(p_object_key, 1) = '/' then
     return false;
   end if;
@@ -67,7 +67,7 @@ create or replace function private.require_document_renderer()
 returns uuid language plpgsql security definer set search_path = pg_catalog, private as $$
 declare a uuid;
 begin
-  if current_user <> 'job_document_renderer' or session_user <> current_user then raise exception using errcode = '42501', message = 'job_document_renderer role is required'; end if;
+  if session_user <> 'job_document_renderer' then raise exception using errcode = '42501', message = 'job_document_renderer role is required'; end if;
   a := private.execution_actor_id();
   if a is null then raise exception using errcode = '42501', message = 'bound document renderer actor is required'; end if;
   return a;
@@ -76,7 +76,7 @@ create or replace function private.require_erp_renderer()
 returns uuid language plpgsql security definer set search_path = pg_catalog, private as $$
 declare a uuid;
 begin
-  if current_user <> 'job_erp_renderer' or session_user <> current_user then raise exception using errcode = '42501', message = 'job_erp_renderer role is required'; end if;
+  if session_user <> 'job_erp_renderer' then raise exception using errcode = '42501', message = 'job_erp_renderer role is required'; end if;
   a := private.execution_actor_id();
   if a is null then raise exception using errcode = '42501', message = 'bound ERP renderer actor is required'; end if;
   return a;
@@ -359,7 +359,7 @@ declare
   object_hash text;
   execution_actor uuid;
 begin
-  if current_user <> 'job_import_worker' or session_user <> current_user then raise exception using errcode = '42501', message = 'job_import_worker role is required'; end if;
+  if session_user <> 'job_import_worker' then raise exception using errcode = '42501', message = 'job_import_worker role is required'; end if;
   execution_actor := private.execution_actor_id();
   if p_actor_account_id is null or execution_actor is distinct from p_actor_account_id
      or p_actual_size_bytes is null or p_actual_size_bytes < 1 or p_actual_size_bytes > 10000000
