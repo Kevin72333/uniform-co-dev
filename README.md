@@ -35,6 +35,8 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [ADR：人資送單預留、倉庫發貨過帳](./docs/adr/0003-reserve-before-warehouse-posting.md)
 - [部署與同步 Runbook](./docs/deployment/runbook.md)
 
+Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，最後提供 definitive parser failure 狀態轉換。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
+
 ## 尚待提供
 
 1. 鼎新 ERP 成功匯入樣本及欄位規格。
