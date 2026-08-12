@@ -6,6 +6,7 @@ import MasterDataPanel from "./MasterDataPanel";
 import WarehouseShipmentPanel from "./WarehouseShipmentPanel";
 import ReplenishmentPanel from "./ReplenishmentPanel";
 import SeasonalCampaignPanel from "./SeasonalCampaignPanel";
+import SeasonalDemandPanel from "./SeasonalDemandPanel";
 
 export default function Home() {
   return (
@@ -27,6 +28,7 @@ export default function Home() {
       <MasterDataPanel />
       <ReplenishmentPanel />
       <SeasonalCampaignPanel />
+      <SeasonalDemandPanel />
       <WarehouseShipmentPanel />
     </main>
   );
