@@ -203,7 +203,7 @@ function sharedStrings(xml: string | undefined, limit: ImportParserLimits): stri
   });
 }
 
-function worksheetRows(xml: string, shared: string[], limit: ImportParserLimits, sheetName: string): string[][] {
+function worksheetRows(xml: string, shared: string[], limit: ImportParserLimits, sheetName: string, totalCellCount: { value: number }): string[][] {
   // OOXML may use namespace-prefixed tags (for example `<x:f>`). Reject
   // every namespace form before extracting values so formula cells cannot be
   // silently skipped by the bounded parser.
@@ -211,7 +211,6 @@ function worksheetRows(xml: string, shared: string[], limit: ImportParserLimits,
     throw new ImportParserError("FORMULA_CELL", `${sheetName} 含有公式儲存格`);
   }
   const rows: string[][] = [];
-  let cellCount = 0;
   for (const rowBody of extractXmlBlocks(xml, /<row\b[^>]*>/gi, "</row>", sheetName)) {
     if (rows.length >= limit.maxRows) throw new ImportParserError("ROW_LIMIT", "XLSX 列數超過上限");
     const values: string[] = [];
@@ -230,8 +229,8 @@ function worksheetRows(xml: string, shared: string[], limit: ImportParserLimits,
       const value = type === "s" ? shared[Number(raw)] ?? "" : type === "b" ? (raw === "1" ? "TRUE" : "FALSE") : raw;
       pushCell(values, value, limit, rows.length + 1);
       kinds.push(type || "number");
-      cellCount += 1;
-      if (cellCount > limit.maxCells) throw new ImportParserError("CELL_LIMIT", "XLSX 儲存格總數超過上限");
+      totalCellCount.value += 1;
+      if (totalCellCount.value > limit.maxCells) throw new ImportParserError("CELL_LIMIT", "XLSX 儲存格總數超過上限");
     }
     if (values.length > 0) {
       if (rows.length > 0) {
@@ -296,7 +295,8 @@ export function parseBoundedXlsx(bytes: Uint8Array, suppliedLimits?: Partial<Imp
   const worksheetNames = names.filter((name) => /^xl\/worksheets\/[^/]+\.xml$/i.test(name)).sort();
   if (worksheetNames.length === 0 || worksheetNames.length > limits.maxSheets) throw new ImportParserError("SHEET_LIMIT", "XLSX 工作表數量不符合上限");
   const shared = sharedStrings(names.includes("xl/sharedStrings.xml") ? decodeUtf8(archive["xl/sharedStrings.xml"]) : undefined, limits);
-  const sheets = worksheetNames.map((name, index) => ({ name: `Sheet${index + 1}`, rows: worksheetRows(decodeUtf8(archive[name]), shared, limits, name) }));
+  const totalCellCount = { value: 0 };
+  const sheets = worksheetNames.map((name, index) => ({ name: `Sheet${index + 1}`, rows: worksheetRows(decodeUtf8(archive[name]), shared, limits, name, totalCellCount) }));
   return { kind: "XLSX", sheets, entryNames };
 }
 

@@ -45,6 +45,13 @@ describe("bounded import worker parser", () => {
       "xl/worksheets/sheet1.xml": bytes("<worksheet><sheetData><row><c r=\"A1\" t=\"inlineStr\"><is><t>employee_no</t></is></c></row><row><c r=\"A2\"><v>1E3</v></c></row></sheetData></worksheet>"),
     });
     expect(() => parseBoundedXlsx(numericIdentifierZip)).toThrowError(/識別碼/);
+    const twoSheetZip = zipSync({
+      "[Content_Types].xml": bytes("<Types/>"),
+      "xl/workbook.xml": bytes("<workbook/>"),
+      "xl/worksheets/sheet1.xml": bytes("<worksheet><sheetData><row><c r=\"A1\" t=\"inlineStr\"><is><t>id</t></is></c></row></sheetData></worksheet>"),
+      "xl/worksheets/sheet2.xml": bytes("<worksheet><sheetData><row><c r=\"A1\" t=\"inlineStr\"><is><t>id</t></is></c></row></sheetData></worksheet>"),
+    });
+    expect(() => parseBoundedXlsx(twoSheetZip, { maxCells: 1 })).toThrowError(/儲存格總數/);
     expect(parseBoundedImportFile(zip, "employees.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").kind).toBe("XLSX");
     expect(() => parseBoundedImportFile(zip, "employees.xlsx", "text/csv")).toThrowError(/副檔名/);
   });
