@@ -52,3 +52,5 @@ Durable import worker 的 forward migration 順序為 `0045` → `0046` → `004
 Durable import worker 的 forward migrations 為 `0045`–`0048`：reference snapshot、bounded chunks、worker/uploader actor separation，以及 malformed-upload failure 都已納入；實際 Supabase/RLS/Storage smoke 仍需受保護 staging worker 執行。
 
 `0049_receipt_correction_reconciliation.sql` 是採購入庫更正的 forward fix：更正 POST 會以本次 delta 過帳、在鎖內重算有效數量與採購配置，必要時將不足預留轉為衝突並記錄 PO 重開原因；更正狀態查詢 RPC 支援瀏覽器回應遺失後恢復。實際 Supabase 交易／鎖序仍需 staging smoke 驗證。
+
+`0050_return_correction.sql` 補齊退回更正：以原退回明細與原發放明細為不可變來源，於共同品號／來源鎖內重算有效退回量，調整人資倉、處理預留衝突並提供 draft／POST／狀態查回 RPC；退回更正工作台保留歷史與 response-loss recovery。實際 SQL／RLS／並行交易仍需 staging smoke 驗證。

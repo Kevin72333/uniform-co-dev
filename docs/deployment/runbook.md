@@ -93,3 +93,5 @@ Production 執行前要先備份、確認目前 migration version、在 staging 
 - 備份／還原與 offsite credentials 尚未配置前，不宣稱 AC-38 或 production RPO/RTO 已通過。
 
 Durable import worker deployment also applies `0046_import_chunk_split_forward.sql`, `0047_import_worker_confirmation_actor.sql`, and `0048_import_upload_failure.sql`; the worker confirms uploads, reuses immutable master snapshots, processes bounded chunks, and durably marks definitive parser failures. Claim keys are generated per lease attempt, while the database worker role and actor binding remain fixed.
+
+`0050_return_correction.sql` 套用後，HR 可從已 POST 退回明細建立 RETURN correction；只有受保護 `create_return_correction_draft`／`post_return_correction` RPC 能寫入，POST 會鎖原退回單、原發放明細、品號 mutex、兩倉餘額及必要的預留集合，重算有效退回量並以本次 delta 調整人資倉。`ReturnCorrectionPanel` 以同一冪等鍵查回建立／POST 結果，展示已 POST 歷史；staging 必須驗證同一原發放明細的退回、退回更正並行時只有鎖後仍合法者成功。
