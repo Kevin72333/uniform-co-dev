@@ -15,6 +15,7 @@ import StocktakePanel from "./StocktakePanel";
 import ReturnPanel from "./ReturnPanel";
 import PdfArtifactPanel from "./PdfArtifactPanel";
 import ErpExportPanel from "./ErpExportPanel";
+import AccountAdminPanel from "./AccountAdminPanel";
 
 export default function Home() {
   return (
@@ -30,6 +31,7 @@ export default function Home() {
         <span className="status-pill">預覽模式</span>
       </header>
       <AuthPanel />
+      <AccountAdminPanel />
       <InventoryCalculator />
       <HrRequestWorkbench />
       <EmployeeImportPanel />
