@@ -79,11 +79,13 @@ try {
   await client.query(`select * from public.${finalizeFn}($1,$2,$3,$4,$5,$6)`, [attempt.id, attempt.lease_token, attempt.lease_generation, objectKey, sha256, info.size]);
 } catch (error) {
   if (attempt?.id) {
-    const permanent = String(error?.message ?? error).includes("different payload");
-    const failFn = kind === "PDF"
-      ? (permanent ? "fail_document_render_attempt" : "retry_document_render_attempt")
-      : (permanent ? "fail_erp_render_attempt" : "retry_erp_render_attempt");
-    await client.query(`select * from public.${failFn}($1,$2,$3,$4,$5)`, [attempt.id, attempt.lease_token, attempt.lease_generation, "RENDER_WORKER_FAILED", String(error?.message ?? error).slice(0, 500)]).catch(() => undefined);
+    // A conflicting object at the reserved key fences only this attempt.  The
+    // database retry RPC creates a fresh attempt/key and applies max_attempts;
+    // failing the whole artifact here would incorrectly discard a recoverable
+    // same-snapshot render.
+    const failFn = kind === "PDF" ? "retry_document_render_attempt" : "retry_erp_render_attempt";
+    const errorCode = String(error?.message ?? error).includes("different payload") ? "RENDER_OBJECT_KEY_CONFLICT" : "RENDER_WORKER_FAILED";
+    await client.query(`select * from public.${failFn}($1,$2,$3,$4,$5)`, [attempt.id, attempt.lease_token, attempt.lease_generation, errorCode, String(error?.message ?? error).slice(0, 500)]).catch(() => undefined);
   }
   throw error;
 } finally {
