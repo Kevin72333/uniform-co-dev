@@ -5,6 +5,7 @@ import {
   summarizeReceiptProgress,
   validatePurchaseDecision,
   validateReceipt,
+  validateReceiptDraft,
 } from "./seasonal-procurement";
 
 describe("seasonal procurement rules", () => {
@@ -49,6 +50,12 @@ describe("seasonal procurement rules", () => {
       /rejectionReason/,
     );
     expect(validateReceipt({ deliveredQuantity: 10, acceptedQuantity: 8, rejectedQuantity: 2, rejectionReason: "破損" })).toBe(8);
+  });
+
+  it("allows an incomplete receipt draft but requires complete classification for posting", () => {
+    expect(() => validateReceiptDraft({ deliveredQuantity: 0, acceptedQuantity: 0, rejectedQuantity: 0 })).not.toThrow();
+    expect(() => validateReceiptDraft({ deliveredQuantity: 10, acceptedQuantity: 4, rejectedQuantity: 0 })).not.toThrow();
+    expect(() => validateReceipt({ deliveredQuantity: 10, acceptedQuantity: 4, rejectedQuantity: 0 })).toThrow(/must equal/);
   });
 
   it("summarizes split receipts and keeps short quantity open", () => {

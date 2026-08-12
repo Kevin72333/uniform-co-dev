@@ -66,8 +66,8 @@ export default function PurchaseReceiptPanel() {
   }
 
   async function createDraft() {
-    if (!client || !selectedLine || !receiptNo.trim() || !quantityBalanced || (rejectedQuantity > 0 && !rejectionReason.trim())) {
-      setMessage("請選擇採購單明細、填寫單號，並確認到貨量＝合格量＋拒收量；拒收時必須填理由。"); return;
+    if (!client || !selectedLine || !receiptNo.trim() || deliveredQuantity < 0 || acceptedQuantity < 0 || rejectedQuantity < 0) {
+      setMessage("請選擇採購單明細、填寫單號與不小於 0 的暫存數量。"); return;
     }
     setBusy(true); setMessage("");
     const key = createKeyRef.current ?? crypto.randomUUID();
@@ -101,7 +101,7 @@ export default function PurchaseReceiptPanel() {
   if (!client) return <section className="panel import-panel" aria-label="採購入庫"><div className="panel-heading"><div><p className="eyebrow">13 / RECEIPT POST</p><h2>採購入庫</h2></div><span className="status-pill">預覽模式</span></div><p className="auth-message">登入 WAREHOUSE 帳號後，選擇採購單、登記到貨／合格／拒收數量並在實物確認後 POST。</p></section>;
   return <section className="panel import-panel" aria-label="採購入庫">
     <div className="panel-heading"><div><p className="eyebrow">13 / RECEIPT POST</p><h2>採購入庫</h2></div><span className="status-pill">總倉入庫</span></div>
-    <p className="auth-message">草稿只保存到貨分類；只有 POST 成功後，合格數量才會以不可重複的庫存流水寫入總倉。系統會重驗採購單未到量、PO 狀態與品號鎖。</p>
+    <p className="auth-message">草稿可先保存尚未完成的驗收數量；只有 POST 成功後，系統才會強制到貨量完整分類，並以不可重複的庫存流水寫入總倉。系統會重驗採購單未到量、PO 狀態與品號鎖。</p>
     <div className="form-grid">
       <label className="field"><span>採購單明細</span><select value={lineId} onChange={(event) => chooseLine(event.target.value)} disabled={busy || Boolean(receipt)}><option value="">請選擇</option>{lines.map((line) => { const order = orders.find((row) => row.id === line.purchase_order_id); return <option key={line.id} value={line.id}>{order?.po_no}｜{order?.supplier_code_snapshot}｜{line.item_code_snapshot}｜訂購 {line.ordered_quantity}</option>; })}</select></label>
       <div className="metric"><span>供應商／品號</span><strong>{selectedOrder?.supplier_code_snapshot ?? "—"}／{selectedLine?.item_code_snapshot ?? "—"}</strong><small>{selectedOrder?.supplier_name_snapshot ?? "請先選擇採購單明細"}</small></div>
@@ -113,7 +113,7 @@ export default function PurchaseReceiptPanel() {
       <div className="metric"><span>分類檢查</span><strong>{acceptedQuantity + rejectedQuantity}／{deliveredQuantity}</strong><small>{quantityBalanced ? "數量平衡" : "合格＋拒收必須等於到貨"}</small></div>
     </div>
     <label className="field reason-field"><span>拒收理由（拒收量大於 0 時必填）</span><input value={rejectionReason} onChange={(event) => { resetOperationKeys(); setRejectionReason(event.target.value); }} maxLength={500} disabled={busy || Boolean(receipt)} placeholder="例如：尺寸／布料不符" /></label>
-    <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(receipt) || !selectedLine || !quantityBalanced}>{busy ? "建立中…" : "建立入庫草稿"}</button>{receipt ? <button className="secondary-button" type="button" onClick={() => void postReceipt()} disabled={busy || receipt.status === "POSTED"}>{busy ? "POST 中…" : receipt.status === "POSTED" ? "已 POST" : "確認並 POST 入庫"}</button> : null}</div>
+    <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(receipt) || !selectedLine}>{busy ? "建立中…" : "建立入庫草稿"}</button>{receipt ? <button className="secondary-button" type="button" onClick={() => void postReceipt()} disabled={busy || receipt.status === "POSTED" || !quantityBalanced || (rejectedQuantity > 0 && !rejectionReason.trim())}>{busy ? "POST 中…" : receipt.status === "POSTED" ? "已 POST" : "確認並 POST 入庫"}</button> : null}</div>
     {receipt ? <p className="success-note">入庫單 {receipt.receipt_no}／狀態 {receipt.status}。{receipt.status === "DRAFT" ? "請完成實物核對後再 POST。" : "此入庫單已鎖定，不能再次修改。"}</p> : null}
     {message ? <p className={message.includes("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
   </section>;

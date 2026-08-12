@@ -80,6 +80,12 @@ export function validateReceipt(input: ReceiptInput): number {
   return input.acceptedQuantity;
 }
 
+export function validateReceiptDraft(input: ReceiptInput): void {
+  assertNonNegativeInteger("deliveredQuantity", input.deliveredQuantity);
+  assertNonNegativeInteger("acceptedQuantity", input.acceptedQuantity);
+  assertNonNegativeInteger("rejectedQuantity", input.rejectedQuantity);
+}
+
 export function summarizeReceiptProgress(
   orderedQuantity: number,
   postedReceipts: ReceiptInput[],
