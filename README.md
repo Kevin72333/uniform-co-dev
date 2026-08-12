@@ -29,6 +29,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [ADR：第一版只支援線上](./docs/adr/0001-online-only-first-release.md)
 - [ADR：以期初庫存切換](./docs/adr/0002-cut-over-with-opening-balances.md)
 - [ADR：人資送單預留、倉庫發貨過帳](./docs/adr/0003-reserve-before-warehouse-posting.md)
+- [部署與同步 Runbook](./docs/deployment/runbook.md)
 
 ## 尚待提供
 
