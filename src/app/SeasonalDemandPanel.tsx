@@ -29,10 +29,10 @@ export default function SeasonalDemandPanel() {
     const supabase = client;
     let active = true;
     async function load() {
-      const [{ data: userData }, campaignResult, accountResult] = await Promise.all([
-        supabase.auth.getUser(),
+      const { data: userData } = await supabase.auth.getUser();
+      const [campaignResult, accountResult] = await Promise.all([
         supabase.from("seasonal_campaigns").select("id,campaign_no,name,closes_at").eq("status", "OPEN").order("closes_at"),
-        supabase.from("app_accounts").select("id").limit(1).maybeSingle(),
+        userData.user ? supabase.from("app_accounts").select("id").eq("auth_user_id", userData.user.id).maybeSingle() : Promise.resolve({ data: null, error: new Error("未登入") }),
       ]);
       if (!active) return;
       if (campaignResult.error || accountResult.error || !userData.user) { setMessage("無法載入開放中的換季活動，請確認窗口帳號與 RLS 權限。"); return; }
