@@ -36,7 +36,7 @@ begin
       raise exception 'Every employee import row must be an object with at most 50 fields';
     end if;
     for field_value in select value from jsonb_each_text(row_value) loop
-      if length(field_value) > 1000000 or position(chr(0) in field_value) > 0 then
+      if length(field_value) > 1000000 then
         raise exception 'Employee import cells exceed the supported limits';
       end if;
     end loop;
