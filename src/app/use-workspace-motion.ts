@@ -13,16 +13,23 @@ export function useWorkspaceMotion(theme: AppearanceTheme) {
   useGSAP(() => {
     if (theme !== "ga") return;
 
+    const root = scope.current;
+    if (!root) return;
+
     const media = gsap.matchMedia();
-    media.add({ reduceMotion: "(prefers-reduced-motion: reduce)" }, ({ conditions }) => {
-      if (conditions?.reduceMotion) return;
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      const sidebar = root.querySelector<HTMLElement>(".app-sidebar");
+      const topbar = root.querySelector<HTMLElement>(".workspace-topbar");
+      const moduleNav = root.querySelector<HTMLElement>(".workspace-module-nav");
+      const pageChildren = root.querySelectorAll<HTMLElement>(".workspace-page.is-active > *");
+      if (!sidebar || !topbar || !moduleNav) return;
 
       const timeline = gsap.timeline({ defaults: { duration: 0.62, ease: "power3.out" } });
       timeline
-        .from(".app-sidebar", { x: -22, autoAlpha: 0, duration: 0.52 })
-        .from(".workspace-topbar", { y: -16, autoAlpha: 0 }, "<0.1")
-        .from(".workspace-module-nav", { y: 14, autoAlpha: 0 }, "<0.1")
-        .from(".workspace-page.is-active > *", { y: 16, autoAlpha: 0, stagger: 0.045, duration: 0.5 }, "<0.12");
+        .from(sidebar, { x: -22, autoAlpha: 0, duration: 0.52 })
+        .from(topbar, { y: -16, autoAlpha: 0 }, "<0.1")
+        .from(moduleNav, { y: 14, autoAlpha: 0 }, "<0.1")
+        .from(pageChildren, { y: 16, autoAlpha: 0, stagger: 0.045, duration: 0.5 }, "<0.12");
 
       return () => timeline.kill();
     }, scope.current ?? undefined);
