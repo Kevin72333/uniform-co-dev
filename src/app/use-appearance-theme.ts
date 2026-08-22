@@ -1,8 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 export const appearanceThemes = [
-  { id: "current", label: "現在風格", description: "Apple-inspired" },
-  { id: "previous", label: "修改前風格", description: "Prototype C" },
+  { id: "current", label: "AP", description: "目前 Apple-inspired 風格" },
+  { id: "previous", label: "MX", description: "修改前 Prototype 風格" },
 ] as const;
 
 export type AppearanceTheme = (typeof appearanceThemes)[number]["id"];

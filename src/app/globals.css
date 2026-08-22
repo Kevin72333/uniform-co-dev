@@ -911,14 +911,11 @@ body {
 }
 
 /* Appearance switcher: one small interface for the two complete visual systems. */
-.workspace-appearance { display: inline-flex; gap: 6px; align-items: center; min-height: 40px; padding: 3px 4px 3px 7px; border: 1px solid rgba(60, 60, 67, .14); border-radius: 11px; color: var(--muted); background: rgba(255, 255, 255, .72); }
+.workspace-appearance { display: inline-flex; gap: 6px; align-items: center; min-height: 40px; padding: 3px 5px 3px 8px; border: 1px solid rgba(60, 60, 67, .14); border-radius: 11px; color: var(--muted); background: rgba(255, 255, 255, .72); cursor: pointer; }
 .workspace-appearance-label { display: inline-flex; gap: 5px; align-items: center; padding-right: 2px; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .workspace-appearance-label .workspace-icon { width: 15px; height: 15px; }
-.workspace-appearance-options { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: rgba(60, 60, 67, .07); }
-.workspace-appearance-options button { min-height: 28px; padding: 5px 9px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font: inherit; font-size: 11px; font-weight: 650; white-space: nowrap; }
-.workspace-appearance-options button:hover { color: var(--ink); background: rgba(255, 255, 255, .7); }
-.workspace-appearance-options button.active { color: var(--accent-dark); background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .1); }
-.workspace-appearance-options button:active { transform: scale(.97); }
+.workspace-appearance-select { min-width: 48px; height: 29px; padding: 0 21px 0 8px; border: 1px solid rgba(60, 60, 67, .13); border-radius: 7px; color: var(--accent-dark); background: rgba(255, 255, 255, .86); font: inherit; font-size: 11px; font-weight: 750; cursor: pointer; }
+.workspace-appearance-select:focus { border-color: rgba(0, 113, 227, .55); outline: 3px solid rgba(0, 113, 227, .14); }
 
 /* The pre-Apple visual system, kept as a complete adapter behind the same shell. */
 html[data-appearance="previous"] {
@@ -1002,9 +999,8 @@ html[data-appearance="previous"] .auth-landing-pattern { opacity: .55; }
 html[data-appearance="previous"] .auth-landing-brand .app-brand-mark { background: var(--accent); }
 html[data-appearance="previous"] .auth-landing .auth-panel { border-color: var(--line); background: var(--card); box-shadow: 0 16px 40px rgba(40, 35, 30, .08); }
 html[data-appearance="previous"] .workspace-appearance { border-color: #d2ccc0; border-radius: 9px; color: var(--muted); background: rgba(249, 248, 244, .92); }
-html[data-appearance="previous"] .workspace-appearance-options { background: #eee8df; }
-html[data-appearance="previous"] .workspace-appearance-options button:hover { color: var(--ink); background: #f7eee8; }
-html[data-appearance="previous"] .workspace-appearance-options button.active { color: var(--accent-dark); background: #f7eee8; box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-appearance="previous"] .workspace-appearance-select { border-color: #d2ccc0; color: var(--accent-dark); background: #f7eee8; }
+html[data-appearance="previous"] .workspace-appearance-select:focus { border-color: var(--accent); outline-color: rgba(198, 83, 55, .16); }
 
 @media (max-width: 1060px) {
   html[data-appearance="previous"] .app-shell { grid-template-columns: 84px minmax(0, 1fr); }
