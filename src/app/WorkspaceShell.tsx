@@ -5,6 +5,7 @@ import AuthPanel from "./AuthPanel";
 import AuthSessionBoundary from "./AuthSessionBoundary";
 import WorkspaceTopbar from "./WorkspaceTopbar";
 import { useAuthSession } from "./use-auth-session";
+import AccountWorkspace from "./workspaces/AccountWorkspace";
 import HrWorkspace from "./workspaces/HrWorkspace";
 import OverviewWorkspace from "./workspaces/OverviewWorkspace";
 import ProcurementWorkspace from "./workspaces/ProcurementWorkspace";
@@ -20,6 +21,9 @@ function WorkspaceIcon({ name }: { name: (typeof workspaceDefinitions)[number]["
   }
   if (name === "people") {
     return <svg {...common}><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 5.5a3 3 0 0 1 0 5.8M16.5 14.5a5 5 0 0 1 4 4.5" /></svg>;
+  }
+  if (name === "account") {
+    return <svg {...common}><circle cx="12" cy="8" r="3" /><path d="M5 20a7 7 0 0 1 14 0" /><path d="M19 5v4M17 7h4" /></svg>;
   }
   if (name === "warehouse") {
     return <svg {...common}><path d="m3 10 9-6 9 6" /><path d="M5 9v10h14V9" /><path d="M9 19v-6h6v6M8 10h.01M12 10h.01M16 10h.01" /></svg>;
@@ -204,7 +208,8 @@ export default function WorkspaceShell() {
               aria-labelledby={`workspace-tab-${workspace.id}`}
               hidden={activeWorkspace !== workspace.id}
             >
-              {workspace.id === "overview" ? <OverviewWorkspace /> : null}
+              {workspace.id === "overview" ? <OverviewWorkspace onNavigate={selectWorkspace} /> : null}
+              {workspace.id === "accounts" ? <AccountWorkspace /> : null}
               {workspace.id === "hr" ? <HrWorkspace /> : null}
               {workspace.id === "warehouse" ? <WarehouseWorkspace /> : null}
               {workspace.id === "procurement" ? <ProcurementWorkspace /> : null}

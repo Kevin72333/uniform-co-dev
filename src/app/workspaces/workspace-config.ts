@@ -6,8 +6,18 @@ export const workspaceDefinitions = [
     eyebrow: "OPERATIONS OVERVIEW",
     description: "集中處理帳號、主檔與匯入準備，讓正式作業使用同一份資料基礎。",
     modules: [
-      { anchor: "overview-access-title", label: "帳號與正式資料基礎", keywords: "帳號 角色 主檔 機構 部門 權限" },
+      { anchor: "overview-access-title", label: "主檔與資料基礎", keywords: "主檔 機構 部門 制服品號 供應商" },
       { anchor: "overview-import-title", label: "耐久匯入", keywords: "匯入 批次 差異 確認 worker" },
+    ],
+  },
+  {
+    id: "accounts",
+    label: "帳號管理",
+    icon: "account",
+    eyebrow: "ACCOUNT ADMINISTRATION",
+    description: "建立帳號、管理登入身份、角色與需求窗口範圍；所有異動都保留理由與稽核紀錄。",
+    modules: [
+      { anchor: "accounts-admin-title", label: "帳號與權限管理", keywords: "帳號 登入 密碼 角色 權限 需求窗口 範圍 稽核" },
     ],
   },
   {

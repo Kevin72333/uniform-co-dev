@@ -1,22 +1,24 @@
-import AccountAdminPanel from "../AccountAdminPanel";
 import DurableImportPanel from "../DurableImportPanel";
 import MasterDataPanel from "../MasterDataPanel";
+import OverviewDashboard from "../OverviewDashboard";
+import type { WorkspaceId } from "./workspace-config";
 
-export default function OverviewWorkspace() {
+type Props = { onNavigate: (workspaceId: WorkspaceId, anchor: string) => void };
+
+export default function OverviewWorkspace({ onNavigate }: Props) {
   return (
     <div className="workspace-sections">
+      <OverviewDashboard onNavigate={onNavigate} />
+
       <section className="workspace-section" aria-labelledby="overview-access-title">
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">ACCESS &amp; FOUNDATION</p>
-            <h2 id="overview-access-title">帳號與正式資料基礎</h2>
+            <h2 id="overview-access-title">主檔與資料基礎</h2>
           </div>
-          <p>所有業務工作區共用這裡的帳號角色、主檔與匯入結果。</p>
+          <p>所有業務工作區共用這裡的機構、部門、制服品號與供應商主檔；帳號與角色請至左側帳號管理。</p>
         </div>
-        <div className="workspace-panel-grid workspace-panel-grid--wide">
-          <AccountAdminPanel />
-          <MasterDataPanel />
-        </div>
+        <MasterDataPanel />
       </section>
 
       <section className="workspace-section" aria-labelledby="overview-import-title">
