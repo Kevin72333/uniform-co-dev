@@ -1,6 +1,7 @@
 import InventoryCalculator from "./InventoryCalculator";
 import HrRequestWorkbench from "./HrRequestWorkbench";
 import AuthPanel from "./AuthPanel";
+import AuthSessionBoundary from "./AuthSessionBoundary";
 import EmployeeImportPanel from "./EmployeeImportPanel";
 import MasterDataPanel from "./MasterDataPanel";
 import WarehouseShipmentPanel from "./WarehouseShipmentPanel";
@@ -38,30 +39,32 @@ export default function Home() {
         <span className="status-pill">預覽模式</span>
       </header>
       <AuthPanel />
-      <AccountAdminPanel />
-      <ReportingPanel />
-      <InventoryCalculator />
-      <HrRequestWorkbench />
-      <EmployeeImportPanel />
-      <MasterDataPanel />
-      <DurableImportPanel />
-      <ReplenishmentPanel />
-      <SeasonalCampaignPanel />
-      <SeasonalDemandPanel />
-      <SeasonalApprovalPanel />
-      <SeasonalProcurementPanel />
-      <ProcurementReasonCodePanel />
-      <PurchaseReceiptPanel />
-      <PurchaseReceiptCorrectionPanel />
-      <StocktakePanel />
-      <ReturnPanel />
-      <ReturnCorrectionPanel />
-      <HrIssueCorrectionPanel />
-      <WarehouseTransferCorrectionPanel />
-      <StocktakeCorrectionPanel />
-      <PdfArtifactPanel />
-      <ErpExportPanel />
-      <WarehouseShipmentPanel />
+      <AuthSessionBoundary>
+        <AccountAdminPanel />
+        <ReportingPanel />
+        <InventoryCalculator />
+        <HrRequestWorkbench />
+        <EmployeeImportPanel />
+        <MasterDataPanel />
+        <DurableImportPanel />
+        <ReplenishmentPanel />
+        <SeasonalCampaignPanel />
+        <SeasonalDemandPanel />
+        <SeasonalApprovalPanel />
+        <SeasonalProcurementPanel />
+        <ProcurementReasonCodePanel />
+        <PurchaseReceiptPanel />
+        <PurchaseReceiptCorrectionPanel />
+        <StocktakePanel />
+        <ReturnPanel />
+        <ReturnCorrectionPanel />
+        <HrIssueCorrectionPanel />
+        <WarehouseTransferCorrectionPanel />
+        <StocktakeCorrectionPanel />
+        <PdfArtifactPanel />
+        <ErpExportPanel />
+        <WarehouseShipmentPanel />
+      </AuthSessionBoundary>
     </main>
   );
 }
