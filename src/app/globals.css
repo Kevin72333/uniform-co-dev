@@ -689,3 +689,46 @@ body {
   .overview-stat > span { font-size: 11px; }
   .overview-stat small { font-size: 10px; }
 }
+
+/* Compact segmented tabs: labels size to their content and panels enter softly. */
+.workspace-module-nav {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 22px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid #d6d0c5;
+  border-radius: 0;
+  background: transparent;
+}
+.workspace-module-nav-heading { display: flex; gap: 8px; align-items: center; min-width: max-content; padding: 0 4px 9px 0; }
+.workspace-module-nav-heading span { margin: 0; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.workspace-module-links { display: flex; flex: 1; gap: 3px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.workspace-module-links button { display: block; flex: 0 0 auto; width: auto; min-height: 38px; padding: 8px 14px 9px; border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; color: var(--muted); background: transparent; font-size: 12px; text-align: center; transition: color .16s ease, background .16s ease, border-color .16s ease, transform .16s ease; }
+.workspace-module-links button:hover { color: var(--accent-dark); background: #f7eee8; border-color: transparent; }
+.workspace-module-links button.active { border-color: transparent; border-bottom-color: var(--accent); color: var(--accent-dark); background: #f7eee8; box-shadow: none; font-weight: 750; }
+.workspace-module-links button:active { transform: translateY(1px); }
+.workspace-module-links button span { font-size: 12px; }
+[id^="workspace-module-panel-"]:not([hidden]) { animation: workspace-tab-enter .2s ease-out both; }
+@keyframes workspace-tab-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 820px) {
+  .workspace-module-nav { display: flex; gap: 10px; align-items: flex-end; }
+  .workspace-module-nav-heading { display: flex; padding-bottom: 9px; }
+}
+
+@media (max-width: 560px) {
+  .workspace-module-nav { display: block; padding: 0; }
+  .workspace-module-nav-heading { gap: 7px; padding: 0 0 7px; }
+  .workspace-module-links { width: calc(100% + 4px); margin-left: -4px; }
+  .workspace-module-links button { padding-right: 12px; padding-left: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [id^="workspace-module-panel-"]:not([hidden]) { animation: none; }
+  .workspace-module-links button { transition: none; }
+}

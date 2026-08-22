@@ -205,7 +205,6 @@ export default function WorkspaceShell() {
                 onClick={() => selectWorkspace(activeWorkspace, module.anchor)}
               >
                 <span>{module.label}</span>
-                <small>{activeModule === module.anchor ? "目前顯示" : "切換內容"}</small>
               </button>
             ))}
           </div>
