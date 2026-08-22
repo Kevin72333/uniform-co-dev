@@ -1270,6 +1270,7 @@ html[data-appearance="mb"] .workspace-appearance-select:focus { border-color: rg
   html[data-appearance="mb"] .workspace-module-nav-heading { gap: 7px; padding: 0 0 7px; }
   html[data-appearance="mb"] .workspace-module-links { width: calc(100% + 4px); margin-left: -4px; }
   html[data-appearance="mb"] .workspace-module-links button { padding-right: 12px; padding-left: 12px; }
+}
 
 /* SH: shadcn-inspired neutral workspace */
 html[data-appearance="sh"] {
@@ -1848,5 +1849,4 @@ html[data-appearance="sh"] input:focus-visible {
     padding-right: 10px;
     padding-left: 10px;
   }
-}
 }
