@@ -57,12 +57,25 @@ $$;
 -- Existing PREPARING/READY rows are promoted to pointers without changing
 -- their immutable artifact rows. Operators must reconcile any duplicate rows.
 update public.document_artifact_families f
-set current_artifact_id = x.id
-from lateral (select a.id from public.document_artifacts a where a.family_id = f.id and a.status = 'READY' and a.is_current order by a.revision desc limit 1) x
+set current_artifact_id = (
+  select a.id
+  from public.document_artifacts a
+  where a.family_id = f.id
+    and a.status = 'READY'
+    and a.is_current
+  order by a.revision desc
+  limit 1
+)
 where f.current_artifact_id is null;
 update public.document_artifact_families f
-set active_artifact_id = x.id
-from lateral (select a.id from public.document_artifacts a where a.family_id = f.id and a.status = 'PREPARING' order by a.revision desc limit 1) x
+set active_artifact_id = (
+  select a.id
+  from public.document_artifacts a
+  where a.family_id = f.id
+    and a.status = 'PREPARING'
+  order by a.revision desc
+  limit 1
+)
 where f.active_artifact_id is null;
 
 -- Keep the legacy request RPCs compatible with the new pointer-based worker:
