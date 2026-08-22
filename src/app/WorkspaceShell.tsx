@@ -13,6 +13,7 @@ import ReportsWorkspace from "./workspaces/ReportsWorkspace";
 import SeasonalWorkspace from "./workspaces/SeasonalWorkspace";
 import WarehouseWorkspace from "./workspaces/WarehouseWorkspace";
 import { isWorkspaceId, type WorkspaceId, workspaceDefinitions } from "./workspaces/workspace-config";
+import { type AppearanceTheme, useAppearanceTheme } from "./use-appearance-theme";
 
 function WorkspaceIcon({ name }: { name: (typeof workspaceDefinitions)[number]["icon"] }) {
   const common = { width: 17, height: 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
@@ -67,6 +68,7 @@ function AuthLanding({ children }: { children: ReactNode }) {
 
 export default function WorkspaceShell() {
   const { client, user, loading } = useAuthSession();
+  const { theme: appearanceTheme, setTheme: setAppearanceTheme } = useAppearanceTheme();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
   const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
@@ -165,6 +167,8 @@ export default function WorkspaceShell() {
         <WorkspaceTopbar
           activeDefinition={activeDefinition}
           user={user}
+          appearanceTheme={appearanceTheme}
+          onAppearanceChange={(theme: AppearanceTheme) => setAppearanceTheme(theme)}
           onNavigate={selectWorkspace}
           onSignOut={async () => {
             const { error } = await client.auth.signOut();

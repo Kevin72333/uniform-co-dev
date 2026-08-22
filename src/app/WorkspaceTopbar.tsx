@@ -8,6 +8,7 @@ import {
   type WorkspaceId,
   type WorkspaceSearchResult,
 } from "./workspaces/workspace-config";
+import { appearanceThemes, type AppearanceTheme } from "./use-appearance-theme";
 
 type NotificationItem = {
   id: string;
@@ -20,6 +21,8 @@ type NotificationItem = {
 type Props = {
   activeDefinition: WorkspaceDefinition;
   user: User;
+  appearanceTheme: AppearanceTheme;
+  onAppearanceChange: (theme: AppearanceTheme) => void;
   onNavigate: (workspaceId: WorkspaceId, anchor: string) => void;
   onSignOut: () => Promise<void>;
 };
@@ -53,6 +56,32 @@ function HelpIcon() {
   return <span className="workspace-help-icon" aria-hidden="true">?</span>;
 }
 
+function AppearanceIcon() {
+  return <svg className="workspace-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 4v16M4 12h16" /><circle cx="12" cy="12" r="2.5" /></svg>;
+}
+
+function AppearanceToggle({ theme, onChange }: { theme: AppearanceTheme; onChange: (theme: AppearanceTheme) => void }) {
+  return (
+    <div className="workspace-appearance" role="group" aria-label="切換版面風格">
+      <span className="workspace-appearance-label"><AppearanceIcon /><span>風格</span></span>
+      <div className="workspace-appearance-options">
+        {appearanceThemes.map((option) => (
+          <button
+            key={option.id}
+            className={theme === option.id ? "active" : ""}
+            type="button"
+            aria-pressed={theme === option.id}
+            title={`${option.label}｜${option.description}`}
+            onClick={() => onChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SearchResults({ results, onSelect }: { results: WorkspaceSearchResult[]; onSelect: (result: WorkspaceSearchResult) => void }) {
   if (results.length === 0) {
     return <p className="workspace-search-empty">找不到相符的正式模組，請改用工作區或流程關鍵字。</p>;
@@ -80,7 +109,7 @@ function SearchResults({ results, onSelect }: { results: WorkspaceSearchResult[]
   );
 }
 
-export default function WorkspaceTopbar({ activeDefinition, user, onNavigate, onSignOut }: Props) {
+export default function WorkspaceTopbar({ activeDefinition, user, appearanceTheme, onAppearanceChange, onNavigate, onSignOut }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -174,6 +203,7 @@ export default function WorkspaceTopbar({ activeDefinition, user, onNavigate, on
         <button className="workspace-icon-button workspace-help-button" type="button" aria-label="快捷鍵說明" title="快捷鍵：輸入 / 可快速搜尋，Esc 關閉面板">
           <HelpIcon />
         </button>
+        <AppearanceToggle theme={appearanceTheme} onChange={onAppearanceChange} />
         <span className="workspace-date-pill">正式資料工作區</span>
         <span className="status-pill">SUPABASE + RLS</span>
         <div className="workspace-account-actions">
