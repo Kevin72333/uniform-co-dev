@@ -3,6 +3,7 @@ import { useEffect, useSyncExternalStore } from "react";
 export const appearanceThemes = [
   { id: "current", label: "AP", description: "目前 Apple-inspired 風格" },
   { id: "previous", label: "MX", description: "修改前 Prototype 風格" },
+  { id: "ga", label: "GA", description: "GSAP motion workspace" },
 ] as const;
 
 export type AppearanceTheme = (typeof appearanceThemes)[number]["id"];

@@ -14,6 +14,7 @@ import SeasonalWorkspace from "./workspaces/SeasonalWorkspace";
 import WarehouseWorkspace from "./workspaces/WarehouseWorkspace";
 import { isWorkspaceId, type WorkspaceId, workspaceDefinitions } from "./workspaces/workspace-config";
 import { type AppearanceTheme, useAppearanceTheme } from "./use-appearance-theme";
+import { useWorkspaceMotion } from "./use-workspace-motion";
 
 function WorkspaceIcon({ name }: { name: (typeof workspaceDefinitions)[number]["icon"] }) {
   const common = { width: 17, height: 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
@@ -69,6 +70,7 @@ function AuthLanding({ children }: { children: ReactNode }) {
 export default function WorkspaceShell() {
   const { client, user, loading } = useAuthSession();
   const { theme: appearanceTheme, setTheme: setAppearanceTheme } = useAppearanceTheme();
+  const motionScope = useWorkspaceMotion(appearanceTheme);
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
   const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
@@ -123,7 +125,7 @@ export default function WorkspaceShell() {
   }
 
   return (
-    <div className="app-shell">
+    <div ref={motionScope} className="app-shell">
       <aside className="app-sidebar" aria-label="工作區導航">
         <div className="app-brand">
           <span className="app-brand-mark" aria-hidden="true">U</span>
