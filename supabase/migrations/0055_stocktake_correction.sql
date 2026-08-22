@@ -13,6 +13,9 @@ alter table public.correction_notes
   );
 alter table public.correction_notes add constraint correction_notes_id_stocktake_unique unique (id, original_stocktake_id);
 
+alter table public.stocktake_lines
+  add constraint stocktake_lines_stocktake_id_id_unique unique (stocktake_id, id);
+
 create table public.stocktake_correction_lines (
   id uuid primary key default gen_random_uuid(),
   correction_note_id uuid not null,
