@@ -67,10 +67,14 @@ function AuthLanding({ children }: { children: ReactNode }) {
   );
 }
 
+function WorkspaceStage({ children, appearanceTheme }: { children: ReactNode; appearanceTheme: AppearanceTheme }) {
+  const motionScope = useWorkspaceMotion(appearanceTheme);
+  return <div ref={motionScope} className="app-shell">{children}</div>;
+}
+
 export default function WorkspaceShell() {
   const { client, user, loading } = useAuthSession();
   const { theme: appearanceTheme, setTheme: setAppearanceTheme } = useAppearanceTheme();
-  const motionScope = useWorkspaceMotion(appearanceTheme);
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
   const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
@@ -125,7 +129,7 @@ export default function WorkspaceShell() {
   }
 
   return (
-    <div ref={motionScope} className="app-shell">
+    <WorkspaceStage appearanceTheme={appearanceTheme}>
       <aside className="app-sidebar" aria-label="工作區導航">
         <div className="app-brand">
           <span className="app-brand-mark" aria-hidden="true">U</span>
@@ -237,6 +241,6 @@ export default function WorkspaceShell() {
           ))}
         </AuthSessionBoundary>
       </div>
-    </div>
+    </WorkspaceStage>
   );
 }
