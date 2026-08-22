@@ -45,6 +45,10 @@ src/app/page.tsx
 - 不要把 Supabase client、RPC 名稱或資料表查詢放進 workspace config；config 只描述導航與工作區元資料。
 - 若功能跨越兩個工作區，保留單一資料面板作為行為來源，必要時用工作區入口或連結導向，不要複製同一份表單狀態。
 
+## 視覺契約
+
+正式網站目前對齊 prototype 的 C 版視覺系統：米灰畫布、深炭側欄、珊瑚色主要操作色、低陰影的米白卡片、12px 圓角與左側珊瑚強調線。共用色票與響應式斷點集中在 `src/app/globals.css` 的 prototype visual system 區塊；新增面板應沿用既有 `.panel`、`.panel-heading`、`.status-pill`、`.primary-button` 與 `.secondary-button`，不要重新建立一套顏色或按鈕樣式。
+
 ## 驗證
 
 UI 重構後至少執行：
