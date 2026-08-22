@@ -5,6 +5,7 @@ export const appearanceThemes = [
   { id: "previous", label: "MX", description: "修改前 Prototype 風格" },
   { id: "ga", label: "GS", description: "GSAP motion workspace" },
   { id: "mb", label: "MB", description: "Agent Skills product workspace" },
+  { id: "sh", label: "SH", description: "shadcn/ui neutral dashboard" },
 ] as const;
 
 export type AppearanceTheme = (typeof appearanceThemes)[number]["id"];
