@@ -2,10 +2,12 @@ import ErpExportPanel from "../ErpExportPanel";
 import PdfArtifactPanel from "../PdfArtifactPanel";
 import ReportingPanel from "../ReportingPanel";
 
-export default function ReportsWorkspace() {
+type Props = { activeModule: string };
+
+export default function ReportsWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" aria-labelledby="reports-view-title">
+      <section className="workspace-section" id="workspace-module-panel-reports-view-title" role="tabpanel" aria-labelledby="workspace-module-tab-reports-view-title" hidden={activeModule !== "reports-view-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">READ-ONLY VIEWS</p>
@@ -16,7 +18,7 @@ export default function ReportsWorkspace() {
         <ReportingPanel />
       </section>
 
-      <section className="workspace-section" aria-labelledby="reports-artifact-title">
+      <section className="workspace-section" id="workspace-module-panel-reports-artifact-title" role="tabpanel" aria-labelledby="workspace-module-tab-reports-artifact-title" hidden={activeModule !== "reports-artifact-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">FORMAL ARTIFACTS</p>

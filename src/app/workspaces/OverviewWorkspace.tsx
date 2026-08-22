@@ -3,14 +3,16 @@ import MasterDataPanel from "../MasterDataPanel";
 import OverviewDashboard from "../OverviewDashboard";
 import type { WorkspaceId } from "./workspace-config";
 
-type Props = { onNavigate: (workspaceId: WorkspaceId, anchor: string) => void };
+type Props = { activeModule: string; onNavigate: (workspaceId: WorkspaceId, anchor: string) => void };
 
-export default function OverviewWorkspace({ onNavigate }: Props) {
+export default function OverviewWorkspace({ activeModule, onNavigate }: Props) {
   return (
     <div className="workspace-sections">
-      <OverviewDashboard onNavigate={onNavigate} />
+      <div id="workspace-module-panel-overview-dashboard-title" role="tabpanel" aria-labelledby="workspace-module-tab-overview-dashboard-title" hidden={activeModule !== "overview-dashboard-title"}>
+        <OverviewDashboard onNavigate={onNavigate} />
+      </div>
 
-      <section className="workspace-section" aria-labelledby="overview-access-title">
+      <section className="workspace-section" id="workspace-module-panel-overview-access-title" role="tabpanel" aria-labelledby="workspace-module-tab-overview-access-title" hidden={activeModule !== "overview-access-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">ACCESS &amp; FOUNDATION</p>
@@ -21,7 +23,7 @@ export default function OverviewWorkspace({ onNavigate }: Props) {
         <MasterDataPanel />
       </section>
 
-      <section className="workspace-section" aria-labelledby="overview-import-title">
+      <section className="workspace-section" id="workspace-module-panel-overview-import-title" role="tabpanel" aria-labelledby="workspace-module-tab-overview-import-title" hidden={activeModule !== "overview-import-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">DURABLE IMPORT</p>

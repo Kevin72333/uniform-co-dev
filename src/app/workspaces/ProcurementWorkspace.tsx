@@ -3,10 +3,12 @@ import PurchaseReceiptCorrectionPanel from "../PurchaseReceiptCorrectionPanel";
 import PurchaseReceiptPanel from "../PurchaseReceiptPanel";
 import SeasonalProcurementPanel from "../SeasonalProcurementPanel";
 
-export default function ProcurementWorkspace() {
+type Props = { activeModule: string };
+
+export default function ProcurementWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" aria-labelledby="procurement-decision-title">
+      <section className="workspace-section" id="workspace-module-panel-procurement-decision-title" role="tabpanel" aria-labelledby="workspace-module-tab-procurement-decision-title" hidden={activeModule !== "procurement-decision-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">PURCHASE DECISION</p>
@@ -20,7 +22,7 @@ export default function ProcurementWorkspace() {
         </div>
       </section>
 
-      <section className="workspace-section" aria-labelledby="procurement-receipt-title">
+      <section className="workspace-section" id="workspace-module-panel-procurement-receipt-title" role="tabpanel" aria-labelledby="workspace-module-tab-procurement-receipt-title" hidden={activeModule !== "procurement-receipt-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">RECEIPT POSTING</p>

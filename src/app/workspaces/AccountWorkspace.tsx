@@ -1,9 +1,11 @@
 import AccountAdminPanel from "../AccountAdminPanel";
 
-export default function AccountWorkspace() {
+type Props = { activeModule: string };
+
+export default function AccountWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" aria-labelledby="accounts-admin-title">
+      <section className="workspace-section" id="workspace-module-panel-accounts-admin-title" role="tabpanel" aria-labelledby="workspace-module-tab-accounts-admin-title" hidden={activeModule !== "accounts-admin-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">ACCOUNT &amp; ACCESS</p>

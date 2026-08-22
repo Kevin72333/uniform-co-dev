@@ -2,10 +2,12 @@ import SeasonalApprovalPanel from "../SeasonalApprovalPanel";
 import SeasonalCampaignPanel from "../SeasonalCampaignPanel";
 import SeasonalDemandPanel from "../SeasonalDemandPanel";
 
-export default function SeasonalWorkspace() {
+type Props = { activeModule: string };
+
+export default function SeasonalWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" aria-labelledby="seasonal-campaign-title">
+      <section className="workspace-section" id="workspace-module-panel-seasonal-campaign-title" role="tabpanel" aria-labelledby="workspace-module-tab-seasonal-campaign-title" hidden={activeModule !== "seasonal-campaign-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">CAMPAIGN SETUP</p>
@@ -19,7 +21,7 @@ export default function SeasonalWorkspace() {
         </div>
       </section>
 
-      <section className="workspace-section" aria-labelledby="seasonal-approval-title">
+      <section className="workspace-section" id="workspace-module-panel-seasonal-approval-title" role="tabpanel" aria-labelledby="workspace-module-tab-seasonal-approval-title" hidden={activeModule !== "seasonal-approval-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">CEO REVIEW</p>

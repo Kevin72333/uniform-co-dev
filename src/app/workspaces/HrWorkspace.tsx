@@ -5,10 +5,12 @@ import ReplenishmentPanel from "../ReplenishmentPanel";
 import ReturnCorrectionPanel from "../ReturnCorrectionPanel";
 import ReturnPanel from "../ReturnPanel";
 
-export default function HrWorkspace() {
+type Props = { activeModule: string };
+
+export default function HrWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" aria-labelledby="hr-request-title">
+      <section className="workspace-section" id="workspace-module-panel-hr-request-title" role="tabpanel" aria-labelledby="workspace-module-tab-hr-request-title" hidden={activeModule !== "hr-request-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">REQUEST WORKBENCH</p>
@@ -23,7 +25,7 @@ export default function HrWorkspace() {
         </div>
       </section>
 
-      <section className="workspace-section" aria-labelledby="hr-correction-title">
+      <section className="workspace-section" id="workspace-module-panel-hr-correction-title" role="tabpanel" aria-labelledby="workspace-module-tab-hr-correction-title" hidden={activeModule !== "hr-correction-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">CORRECTIONS &amp; IMPORT</p>

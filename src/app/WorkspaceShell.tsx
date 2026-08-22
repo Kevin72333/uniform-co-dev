@@ -68,7 +68,9 @@ function AuthLanding({ children }: { children: ReactNode }) {
 export default function WorkspaceShell() {
   const { client, user, loading } = useAuthSession();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
+  const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
+  const activeModule = activeModuleByWorkspace[activeWorkspace] ?? activeDefinition.modules[0].anchor;
 
   useEffect(() => {
     const syncWorkspace = () => setActiveWorkspace(workspaceFromUrl());
@@ -82,15 +84,17 @@ export default function WorkspaceShell() {
   }, []);
 
   function selectWorkspace(id: WorkspaceId, anchor?: string) {
+    const definition = workspaceDefinitions.find((workspace) => workspace.id === id) ?? workspaceDefinitions[0];
+    const nextModule = anchor && definition.modules.some((module) => module.anchor === anchor)
+      ? anchor
+      : definition.modules[0].anchor;
+    const workspaceChanged = activeWorkspace !== id;
     setActiveWorkspace(id);
+    setActiveModuleByWorkspace((current) => ({ ...current, [id]: nextModule }));
     if (window.location.hash !== `#${id}`) {
       window.history.pushState({}, "", `#${id}`);
     }
-    if (anchor) {
-      window.setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
-    } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    if (workspaceChanged) window.scrollTo({ top: 0, behavior: "auto" });
   }
 
   if (!client) {
@@ -188,11 +192,20 @@ export default function WorkspaceShell() {
             <p className="eyebrow">MODULES</p>
             <span>本工作區功能</span>
           </div>
-          <div className="workspace-module-links">
+          <div className="workspace-module-links" role="tablist" aria-label={`${activeDefinition.label}功能頁籤`}>
             {activeDefinition.modules.map((module) => (
-              <button key={module.anchor} type="button" onClick={() => selectWorkspace(activeWorkspace, module.anchor)}>
+              <button
+                key={module.anchor}
+                className={activeModule === module.anchor ? "active" : ""}
+                id={`workspace-module-tab-${module.anchor}`}
+                type="button"
+                role="tab"
+                aria-selected={activeModule === module.anchor}
+                aria-controls={`workspace-module-panel-${module.anchor}`}
+                onClick={() => selectWorkspace(activeWorkspace, module.anchor)}
+              >
                 <span>{module.label}</span>
-                <small>檢視模組</small>
+                <small>{activeModule === module.anchor ? "目前顯示" : "切換內容"}</small>
               </button>
             ))}
           </div>
@@ -208,13 +221,13 @@ export default function WorkspaceShell() {
               aria-labelledby={`workspace-tab-${workspace.id}`}
               hidden={activeWorkspace !== workspace.id}
             >
-              {workspace.id === "overview" ? <OverviewWorkspace onNavigate={selectWorkspace} /> : null}
-              {workspace.id === "accounts" ? <AccountWorkspace /> : null}
-              {workspace.id === "hr" ? <HrWorkspace /> : null}
-              {workspace.id === "warehouse" ? <WarehouseWorkspace /> : null}
-              {workspace.id === "procurement" ? <ProcurementWorkspace /> : null}
-              {workspace.id === "seasonal" ? <SeasonalWorkspace /> : null}
-              {workspace.id === "reports" ? <ReportsWorkspace /> : null}
+              {workspace.id === "overview" ? <OverviewWorkspace activeModule={activeWorkspace === "overview" ? activeModule : ""} onNavigate={selectWorkspace} /> : null}
+              {workspace.id === "accounts" ? <AccountWorkspace activeModule={activeWorkspace === "accounts" ? activeModule : ""} /> : null}
+              {workspace.id === "hr" ? <HrWorkspace activeModule={activeWorkspace === "hr" ? activeModule : ""} /> : null}
+              {workspace.id === "warehouse" ? <WarehouseWorkspace activeModule={activeWorkspace === "warehouse" ? activeModule : ""} /> : null}
+              {workspace.id === "procurement" ? <ProcurementWorkspace activeModule={activeWorkspace === "procurement" ? activeModule : ""} /> : null}
+              {workspace.id === "seasonal" ? <SeasonalWorkspace activeModule={activeWorkspace === "seasonal" ? activeModule : ""} /> : null}
+              {workspace.id === "reports" ? <ReportsWorkspace activeModule={activeWorkspace === "reports" ? activeModule : ""} /> : null}
             </section>
           ))}
         </AuthSessionBoundary>

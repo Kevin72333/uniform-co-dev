@@ -6,6 +6,7 @@ export const workspaceDefinitions = [
     eyebrow: "OPERATIONS OVERVIEW",
     description: "集中處理帳號、主檔與匯入準備，讓正式作業使用同一份資料基礎。",
     modules: [
+      { anchor: "overview-dashboard-title", label: "營運總覽", keywords: "總覽 KPI 工作佇列 快速入口 進度 活動" },
       { anchor: "overview-access-title", label: "主檔與資料基礎", keywords: "主檔 機構 部門 制服品號 供應商" },
       { anchor: "overview-import-title", label: "耐久匯入", keywords: "匯入 批次 差異 確認 worker" },
     ],

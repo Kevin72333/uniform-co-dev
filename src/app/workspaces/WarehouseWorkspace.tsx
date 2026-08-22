@@ -4,10 +4,12 @@ import StocktakePanel from "../StocktakePanel";
 import WarehouseShipmentPanel from "../WarehouseShipmentPanel";
 import WarehouseTransferCorrectionPanel from "../WarehouseTransferCorrectionPanel";
 
-export default function WarehouseWorkspace() {
+type Props = { activeModule: string };
+
+export default function WarehouseWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" aria-labelledby="warehouse-control-title">
+      <section className="workspace-section" id="workspace-module-panel-warehouse-control-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-control-title" hidden={activeModule !== "warehouse-control-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">WAREHOUSE CONTROL</p>
@@ -19,7 +21,7 @@ export default function WarehouseWorkspace() {
         <WarehouseShipmentPanel />
       </section>
 
-      <section className="workspace-section" aria-labelledby="warehouse-stocktake-title">
+      <section className="workspace-section" id="workspace-module-panel-warehouse-stocktake-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-stocktake-title" hidden={activeModule !== "warehouse-stocktake-title"}>
         <div className="workspace-section-heading">
           <div>
             <p className="eyebrow">STOCKTAKE &amp; CORRECTION</p>

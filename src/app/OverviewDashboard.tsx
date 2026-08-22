@@ -217,7 +217,7 @@ export default function OverviewDashboard({ onNavigate }: Props) {
   }, [data]);
 
   return (
-    <section className="overview-dashboard" aria-label="營運總覽儀表板">
+    <section className="overview-dashboard" id="overview-dashboard-title" aria-label="營運總覽儀表板">
       <div className="overview-dashboard-heading">
         <div>
           <p className="eyebrow">TODAY / OPERATIONS SNAPSHOT</p>

@@ -586,6 +586,7 @@ body {
 .workspace-module-links { display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .workspace-module-links button { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-width: 0; padding: 10px 12px; border: 1px solid #e0dacf; border-radius: 9px; color: var(--ink); background: rgba(255, 255, 255, .38); text-align: left; }
 .workspace-module-links button:hover { border-color: var(--accent); background: #f7eee8; }
+.workspace-module-links button.active { border-color: var(--accent); color: var(--accent-dark); background: #f7eee8; box-shadow: inset 0 -3px 0 var(--accent); }
 .workspace-module-links button span { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-module-links button small { flex: 0 0 auto; color: var(--accent-dark); font-size: 10px; }
 .workspace-section-heading { scroll-margin-top: 24px; }
