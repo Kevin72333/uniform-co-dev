@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import AuthPanel from "./AuthPanel";
 import AuthSessionBoundary from "./AuthSessionBoundary";
+import WorkspaceTopbar from "./WorkspaceTopbar";
+import { useAuthSession } from "./use-auth-session";
 import HrWorkspace from "./workspaces/HrWorkspace";
 import OverviewWorkspace from "./workspaces/OverviewWorkspace";
 import ProcurementWorkspace from "./workspaces/ProcurementWorkspace";
@@ -39,7 +41,28 @@ function workspaceFromUrl(): WorkspaceId {
   return isWorkspaceId(value) ? value : "overview";
 }
 
+function AuthLanding({ children }: { children: ReactNode }) {
+  return (
+    <main className="auth-landing">
+      <div className="auth-landing-pattern" aria-hidden="true" />
+      <div className="auth-landing-content">
+        <div className="auth-landing-brand">
+          <span className="app-brand-mark" aria-hidden="true">U</span>
+          <div>
+            <p className="eyebrow">UNIFORM CO.</p>
+            <h1>制服資產作業台</h1>
+            <p>正式資料工作區</p>
+          </div>
+        </div>
+        {children}
+        <p className="auth-landing-footnote">Supabase Auth ／ PostgreSQL RLS ／ 正式資料工作區</p>
+      </div>
+    </main>
+  );
+}
+
 export default function WorkspaceShell() {
+  const { client, user, loading } = useAuthSession();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
 
@@ -54,12 +77,39 @@ export default function WorkspaceShell() {
     };
   }, []);
 
-  function selectWorkspace(id: WorkspaceId) {
+  function selectWorkspace(id: WorkspaceId, anchor?: string) {
     setActiveWorkspace(id);
     if (window.location.hash !== `#${id}`) {
       window.history.pushState({}, "", `#${id}`);
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (anchor) {
+      window.setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  if (!client) {
+    return <AuthLanding><AuthPanel /></AuthLanding>;
+  }
+
+  if (loading) {
+    return (
+      <AuthLanding>
+        <section className="auth-panel panel auth-loading" aria-live="polite" aria-label="確認登入狀態">
+          <div>
+            <p className="eyebrow">ACCOUNT / VERIFYING SESSION</p>
+            <h2>正在確認登入狀態</h2>
+            <p className="auth-message">工作區資料會在登入驗證完成後載入。</p>
+          </div>
+          <span className="status-pill">SESSION CHECK</span>
+        </section>
+      </AuthLanding>
+    );
+  }
+
+  if (!user) {
+    return <AuthLanding><AuthPanel /></AuthLanding>;
   }
 
   return (
@@ -94,9 +144,9 @@ export default function WorkspaceShell() {
 
         <div className="app-sidebar-bottom">
           <div className="app-user-chip">
-            <span className="app-avatar" aria-hidden="true">U</span>
+            <span className="app-avatar" aria-hidden="true">{(user.email?.[0] ?? "U").toUpperCase()}</span>
             <div>
-              <strong>目前登入帳號</strong>
+              <strong>{user.email ?? "已登入帳號"}</strong>
               <span>角色與資料範圍由 RLS 判定</span>
             </div>
           </div>
@@ -104,17 +154,15 @@ export default function WorkspaceShell() {
       </aside>
 
       <div className="app-main">
-        <header className="workspace-topbar" aria-labelledby="active-workspace-title">
-          <div className="workspace-topbar-copy">
-            <p className="eyebrow">{activeDefinition.eyebrow}</p>
-            <h1 id="active-workspace-title">{activeDefinition.label}</h1>
-            <p>{activeDefinition.description}</p>
-          </div>
-          <div className="workspace-topbar-actions">
-            <span className="workspace-date-pill">正式資料工作區</span>
-            <span className="status-pill">SUPABASE + RLS</span>
-          </div>
-        </header>
+        <WorkspaceTopbar
+          activeDefinition={activeDefinition}
+          user={user}
+          onNavigate={selectWorkspace}
+          onSignOut={async () => {
+            const { error } = await client.auth.signOut();
+            if (error) throw error;
+          }}
+        />
 
         <div className="workspace-mobile-switcher">
           <label htmlFor="workspace-mobile-select">目前工作區</label>
@@ -131,7 +179,20 @@ export default function WorkspaceShell() {
           </select>
         </div>
 
-        <AuthPanel />
+        <nav className="workspace-module-nav" aria-label={`${activeDefinition.label}模組導航`}>
+          <div className="workspace-module-nav-heading">
+            <p className="eyebrow">MODULES</p>
+            <span>本工作區功能</span>
+          </div>
+          <div className="workspace-module-links">
+            {activeDefinition.modules.map((module) => (
+              <button key={module.anchor} type="button" onClick={() => selectWorkspace(activeWorkspace, module.anchor)}>
+                <span>{module.label}</span>
+                <small>檢視模組</small>
+              </button>
+            ))}
+          </div>
+        </nav>
 
         <AuthSessionBoundary>
           {workspaceDefinitions.map((workspace) => (
