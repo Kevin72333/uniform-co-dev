@@ -32,6 +32,9 @@ alter table public.correction_notes
   add constraint correction_notes_id_shipment_unique unique (id, original_warehouse_shipment_id),
   add constraint correction_notes_id_replenishment_unique unique (id, original_replenishment_request_id);
 
+alter table public.replenishment_request_lines
+  add constraint replenishment_request_lines_request_id_id_unique unique (request_id, id);
+
 create table public.warehouse_transfer_correction_lines (
   id uuid primary key default gen_random_uuid(),
   correction_note_id uuid not null,
