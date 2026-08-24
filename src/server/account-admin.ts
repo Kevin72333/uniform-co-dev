@@ -101,8 +101,8 @@ function loginNameValue(value: unknown): string {
 }
 
 function passwordValue(value: unknown): string {
-  if (typeof value !== "string" || value.length < 12 || value.length > 256) {
-    throw new AccountAdminError("密碼至少 12 個字元，且不可超過 256 個字元。");
+  if (typeof value !== "string" || value.length < 6 || value.length > 256) {
+    throw new AccountAdminError("密碼至少 6 個字元，且不可超過 256 個字元。");
   }
   return value;
 }

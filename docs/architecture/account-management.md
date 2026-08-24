@@ -14,7 +14,7 @@
 
 網站模組提供：
 
-- 建立帳號與登入身份：登入帳號、至少 12 字元的初始密碼及至少一個角色必填；顯示名稱與聯絡 email 選填。server route 先建立 Auth user，再以 `create_account_with_roles` 在同一資料庫交易建立業務帳號與完整角色集合。
+- 建立帳號與登入身份：登入帳號、至少 6 字元的初始密碼及至少一個角色必填；顯示名稱與聯絡 email 選填。server route 先建立 Auth user，再以 `create_account_with_roles` 在同一資料庫交易建立業務帳號與完整角色集合。
 - 修改帳號資料：可修改登入帳號、顯示名稱與選填聯絡 email；只有登入帳號會同步內部 Auth email，聯絡 email 只更新 `email_snapshot`。資料庫失敗時 server 會嘗試回復 Auth 登入身份。
 - 修改密碼：由 server-side `auth.admin.updateUserById` 更新，不保存密碼明文；稽核只記錄「密碼已變更」事件。
 - 啟用／停用：資料庫先更新 `app_accounts.is_active`，Auth 再以 ban 100 年或解除 ban 同步登入限制。

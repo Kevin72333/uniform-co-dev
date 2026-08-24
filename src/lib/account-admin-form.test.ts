@@ -10,7 +10,7 @@ describe("account creation form", () => {
       reason: "",
     })).toEqual([
       "請填寫登入帳號。",
-      "初始密碼至少需要 12 個字元。",
+      "初始密碼至少需要 6 個字元。",
       "請至少選擇一個角色權限。",
       "請填寫建立理由。",
     ]);
@@ -20,6 +20,15 @@ describe("account creation form", () => {
     expect(validateAccountCreation({
       loginName: "hr01",
       password: "a-secure-pass",
+      roleCount: 1,
+      reason: "建立人資帳號",
+    })).toEqual([]);
+  });
+
+  it("accepts the six-character minimum", () => {
+    expect(validateAccountCreation({
+      loginName: "hr01",
+      password: "123456",
       roleCount: 1,
       reason: "建立人資帳號",
     })).toEqual([]);

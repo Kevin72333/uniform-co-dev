@@ -225,7 +225,7 @@ export default function AccountAdminPanel() {
   }
 
   async function updatePassword() {
-    if (!selectedId || !resetPassword || !reason.trim()) { setMessageKind("error"); setMessage("請輸入至少 12 個字元的新密碼與操作理由。"); return; }
+    if (!selectedId || resetPassword.length < 6 || !reason.trim()) { setMessageKind("error"); setMessage("請輸入至少 6 個字元的新密碼與操作理由。"); return; }
     setBusy(true); setMessage("");
     try { await runOperation({ operation: "set_password", account_id: selectedId, password: resetPassword, reason: reason.trim() }, "password"); setResetPassword(""); }
     catch (error) { setMessageKind("error"); setMessage(error instanceof Error ? error.message : "密碼修改失敗。"); }
@@ -268,7 +268,7 @@ export default function AccountAdminPanel() {
     <div className="subheading account-create-heading"><h3>新增帳號</h3><span>帳號、密碼、角色與理由完成後送出</span></div>
     <div className="form-grid">
       <label className="field"><span>登入帳號（必填）</span><input autoComplete="username" value={loginName} onChange={(event) => { resetOperation("create"); setLoginName(event.target.value); }} disabled={busy} placeholder="例如 hr01" /></label>
-      <label className="field"><span>初始密碼（至少 12 字元）</span><input autoComplete="new-password" type="password" value={password} onChange={(event) => { resetOperation("create"); setPassword(event.target.value); }} disabled={busy} /></label>
+      <label className="field"><span>初始密碼（至少 6 字元）</span><input autoComplete="new-password" type="password" value={password} onChange={(event) => { resetOperation("create"); setPassword(event.target.value); }} disabled={busy} /></label>
       <label className="field"><span>顯示名稱（選填，預設同帳號）</span><input value={displayName} onChange={(event) => { resetOperation("create"); setDisplayName(event.target.value); }} disabled={busy} /></label>
       <label className="field"><span>聯絡 Email（選填，不作登入）</span><input autoComplete="email" type="email" value={email} onChange={(event) => { resetOperation("create"); setEmail(event.target.value); }} disabled={busy} /></label>
       <label className="field"><span>建立理由（必填）</span><input value={reason} onChange={(event) => { resetOperation("create"); setReason(event.target.value); }} disabled={busy} /></label>
@@ -293,9 +293,9 @@ export default function AccountAdminPanel() {
       <div className="increase-list">
         <div className="subheading"><h3>密碼管理</h3><span>新密碼只經過此次 HTTPS 請求，不寫入 app_accounts</span></div>
         <div className="form-grid">
-          <label className="field"><span>設定新密碼（至少 12 字元）</span><input autoComplete="new-password" type="password" value={resetPassword} onChange={(event) => { resetOperation("password"); setResetPassword(event.target.value); }} disabled={busy} /></label>
+          <label className="field"><span>設定新密碼（至少 6 字元）</span><input autoComplete="new-password" type="password" value={resetPassword} onChange={(event) => { resetOperation("password"); setResetPassword(event.target.value); }} disabled={busy} /></label>
         </div>
-        <div className="button-row"><button className="secondary-button" type="button" onClick={() => void updatePassword()} disabled={busy || resetPassword.length < 12 || !selected.auth_user_id || !reason.trim()}>修改登入密碼</button></div>
+        <div className="button-row"><button className="secondary-button" type="button" onClick={() => void updatePassword()} disabled={busy || resetPassword.length < 6 || !selected.auth_user_id || !reason.trim()}>修改登入密碼</button></div>
       </div>
       <div className="increase-list">
         <div className="subheading"><h3>角色權限</h3><span>可同時勾選多個角色並一次儲存</span></div>
