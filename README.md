@@ -14,6 +14,26 @@
 
 Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql` 涵蓋核心主檔、供應商條件、兩倉餘額、受 RLS 保護的 HR 草稿、人資需求、歷史快照、冪等 `operation_commands`、品號鎖與合計預留 `submit_hr_request` RPC；`0002_warehouse_shipping.sql` 新增倉庫發貨草稿、固定鎖序的 `post_warehouse_shipment` RPC、總倉調出／人資倉調入／發放流水及 POSTED 鎖單；`0003_replenishment.sql` 新增不建立預留的補庫送出與 POST；`0004_stocktake.sql` 新增依 balance version fencing 的盤點 POST 與 `STALE_COUNT`；`0005_returns.sql` 新增原始發放明細同源驗證的退回 POST；`0006_employee_import.sql` 新增整批驗證後原子 upsert 員工主檔的匯入 RPC；`0007_seasonal_procurement.sql` 建立含季別、精確開放／截止時間、凍結員工／品號範圍、窗口需求、核准快照、供應商 MOQ、採購單與分批驗收的 RLS 資料基線；`0008_seasonal_procurement_rpc.sql` 新增活動建立／範圍設定／開放／關閉、送核、帶 revision/hash 的 CEO 核准或退回、不可覆寫的 MOQ 決策、採購上限調整、採購下單、驗收草稿與總倉入庫 POST；`0009_purchase_receipt_corrections.sql` 新增同源採購入庫更正草稿與 POST、有效到貨／合格／拒收重算、總倉合格數量 delta 與 PO `REOPENED` 狀態；`0010_purchase_order_lifecycle.sql` 新增訂購量具理由調整、`REOPENED`、取消與 `CLOSED_SHORT` 終止交易；`0011_erp_export_snapshot.sql` 新增日期＋機構的不可變 ERP 邏輯批次、來源追溯、artifact revision／render attempt 基線與批次／artifact request RPC；`0012_document_artifacts.sql` 新增各類單據 PDF family、不可變 artifact revision、render attempt 與受權限保護的 PDF request RPC，現有需求工作台提供瀏覽器 A4 列印預覽；`0013_opening_balance_cutover.sql` 新增 SYSTEM_ADMIN 專用期初批次、全域 PRE_CUTOVER／LIVE singleton、opening ledger 與非 LIVE 過帳的資料庫 gate；`0014_master_data_import_export.sql` 新增機構、部門、制服、供應商與供應商 MOQ 的整批驗證／原子 upsert，以及角色限制的 JSON 匯出 RPC。`src/domain/erp-export.ts` 僅提供已驗證的示範格式版本；鼎新正式格式仍需成功匯入樣本。領域測試固定 MOQ／配置上限／驗收與 ERP 彙總規則。正式上線前仍需補齊 PDF renderer／Storage finalize、期初真實資料演練，以及 Supabase project secrets、鼎新欄位映射與角色初始資料。
 
+## 正式應用接手狀態（2026-08-24）
+
+正式 Next.js 應用已部署至 [uniform-co.vercel.app](https://uniform-co.vercel.app/)，程式碼由 GitHub `Kevin72333/uniform-co` 的 `main` 分支提供，資料與登入由 Supabase project 提供。正式操作必須先登入；未設定 Supabase env 或未有有效 session 時只顯示登入／設定畫面，不載入工作區資料。
+
+### 已完成的正式介面
+
+- `WorkspaceShell` 集中處理登入 gate、session refresh、左側工作區導航、網址 hash 切換與共用 topbar；正式工作區為「總覽、帳號管理、人資需求、倉庫作業、採購與入庫、換季活動、報表」七個 workspace。
+- 每個 workspace 的功能由 `src/app/workspaces/*Workspace.tsx` 組裝，模組定義、頁籤名稱與搜尋索引集中在 `src/app/workspaces/workspace-config.ts`；功能頁籤是 tab 切換，不是按鈕把畫面往下捲動。
+- topbar 已包含 workspace 搜尋、通知中心、日期／資料狀態、帳號操作與風格下拉選單；手機版改用工作區下拉選單，桌面版使用左側導航。
+- `AccountAdminPanel` 已獨立在左側「帳號管理」workspace，支援建立帳號與登入身份、修改資料、修改登入密碼、六種業務角色（`SYSTEM_ADMIN`、`HR`、`WAREHOUSE`、`PROCUREMENT`、`CEO`、`DEMAND_COORDINATOR`）、啟用／停用、需求窗口的機構／部門範圍、Auth 綁定重設／解除，以及保留業務歷史的刪除操作。管理 API 位於 `src/app/api/admin/accounts/route.ts`，server-side 實作位於 `src/server/account-admin.ts`，權限與稽核契約以 `0036_account_role_scope_admin.sql` 為準。
+- 風格下拉選單與 localStorage key `uniform:appearance-theme` 已提供五套可切換樣式：`AP`（目前 Apple-inspired）、`MX`（修改前 Prototype）、`GS`（GSAP motion；程式 id 保留為 `ga`）、`MB`（product workspace）、`SH`（shadcn/ui-inspired neutral dashboard）。SH 是現有 CSS token adapter，不額外引入 shadcn runtime dependency；樣式集中在 `src/app/globals.css`，選項集中在 `src/app/use-appearance-theme.ts`。
+- 版面基線為 commit `3059723`；若後續只調整視覺，優先沿用 appearance seam，不要把某一套風格的 CSS 寫回共用 base rule，也不要改變 workspace／domain data flow。
+
+### 正式應用的接手順序
+
+1. 先讀本節、`CONTEXT.md`、`agents.md`，再依需求範圍讀 `docs/spec/`、`docs/architecture/`、`docs/implementation/`。
+2. UI／版面需求先搜尋現有 workspace、panel、theme selector 與 CSS token；功能需求先搜尋對應 domain function、panel 與 migration，再做最小 patch。
+3. 所有帳號、角色與範圍異動都必須經 server-side API／Supabase 受保護 RPC，不能從瀏覽器直接使用 service role 或寫入 Auth 管理資料。
+4. Prototype 與正式 App 是兩個不同驗收面：prototype 只驗證內容與流程；正式功能要驗證 Supabase Auth、RLS、Storage、RPC、並行鎖與 staging smoke。
+
 ## 文件索引
 
 `0015_draft_creation_rpc.sql` 將人資需求、補庫與倉庫發貨的草稿建立接到受保護、冪等 RPC；`0016_employee_import_guard.sql` 將員工匯入的大小、欄數與儲存格限制移到資料庫端；`0017_seasonal_scope_guard.sql` 阻擋沒有員工/品號範圍的換季活動開放；`0018_seasonal_snapshot_at_open.sql` 在開放瞬間刷新並凍結員工歸屬快照；`0019_seasonal_demand_rpc.sql` 與 `0020_seasonal_demand_integrity.sql` 讓需求窗口只能透過鎖定活動、使用凍結範圍快照的伺服器 RPC 登記需求，並撤銷 direct DML；`0021_seasonal_hr_correction.sql` 提供 HR 待核修正 RPC 與快照範圍讀取；`0022_procurement_reason_codes.sql` 加入可維護採購差異原因碼、SYSTEM_ADMIN 維護 RPC、停用供應商防線與採購決策 RPC 的 active supplier 驗證；`0023_receipt_draft_validation.sql` 允許採購入庫草稿先保存未完成分類，並將完整分類與拒收理由檢查放在 POST 交易；`0024_receipt_draft_update.sql` 讓入庫草稿可依固定鎖序修改；`0025_stocktake_draft_rpcs.sql` 將盤點草稿建立／更新改由受保護 RPC 在交易內擷取帳面量與 balance version，前端新增盤點工作台並保留 `STALE_COUNT` 版本 fencing；`0026_return_draft_rpc.sql` 將退回草稿建立改由原始發放明細推導身份與快照，前端新增退回草稿／POST 工作台；`0027_stocktake_conflict_forward.sql` 將兩倉合計預留衝突與需求轉 `INVENTORY_REVIEW_REQUIRED` 的盤點 POST 修正套用到已完成初始 migration 的環境；`0028_stocktake_update_forward.sql` 將盤點更新 RPC 的重盤簽章與確認防線套用到舊環境；`0029_return_schema_forward.sql` 將退回明細的 line_no 與唯一約束補到舊環境。盤點調減會以兩倉合計檢查有效預留，必要時同交易標記需求需重新檢查；前端也提供 CEO 待核版本的 revision/hash 核准或退回入口、採購決策／採購單、採購入庫、庫存盤點、員工制服退回與 A4 PDF artifact 請求／狀態入口；入庫草稿可先暫存，POST 後才把合格量寫入總倉。人資工作台在 Supabase 環境會載入正式主檔並可建立草稿後送出預留，員工 CSV 匯入工作台也可確認後原子套用員工主檔；換季工作台可建立活動並凍結員工/品號範圍、需求窗口可在授權範圍登記數量，再呼叫受保護 RPC 開放需求窗口。
@@ -34,6 +54,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [ADR：以期初庫存切換](./docs/adr/0002-cut-over-with-opening-balances.md)
 - [ADR：人資送單預留、倉庫發貨過帳](./docs/adr/0003-reserve-before-warehouse-posting.md)
 - [部署與同步 Runbook](./docs/deployment/runbook.md)
+- [AI agent 接手指南](./agents.md)
 
 Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048` → `0056` → `0058` → `0061`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，提供 definitive parser failure 狀態轉換，最後讓受控 `job_import_worker` 確認由使用者上傳的 object（保留原 uploader attribution）並進入解析；`0058` 也會在 worker batch lock 內修復 0046 以前遺留的 oversized PARSE chunk，`0061` 保留單檔 10MB 上限但容納 JSONB chunk envelope 的編碼膨脹。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
 
@@ -46,6 +67,8 @@ Durable import worker 的 forward migration 順序為 `0045` → `0046` → `004
 5. 異地備份目的地、兩位金鑰保管人、維運信箱，以及暫定 RPO／RTO 的業務接受人。
 6. 三年員工、交易、匯入、PDF／ERP 檔案量預估與公司正式保存年限。
 7. 連接 Vercel Hobby 的個人 GitHub repository owner 與帳號移交／備援負責人。
+
+第 4 項的界線：帳號管理介面、server-side 管理 API、六角色與需求窗口範圍控制已完成；目前仍待提供的是正式第一批帳號、角色指派、需求窗口機構／部門範圍與移交責任人清單。GitHub → Vercel → Supabase 的免費方案部署鏈已可運作，但正式交接仍需補上 owner、備援聯絡人與環境設定清單。
 
 可立即依[實作路線圖](./docs/implementation/roadmap.md)開始第 0 階段蒐集與技術驗證。鼎新樣本阻擋第 4 階段驗收；主檔與期初樣本阻擋第 5 階段切換；列印樣式、帳號清單、備份還原與三年容量 gate 則分別阻擋文件、使用者及正式上線驗收。
 
@@ -70,3 +93,39 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`、`005
 `0059_receipt_correction_lockset_forward.sql` 在採購入庫更正調整庫存／預留前再次核對完整需求 reservation lock set；若並行交易在 item mutex 後新增其他品項預留，交易以 40001 重試而不使用部分集合。`0061_import_chunk_payload_bound.sql` 將解析 chunk 的 JSONB payload guard 提高至 25MB，保留單檔 10MB 上限但容納 JSON escaping／差異欄位的膨脹，不改寫既有匯入歷史。
 
 `0060_pdf_document_type_coverage.sql` 將同一個 snapshot／revision／renderer payload state machine 擴展到發貨、補庫、換季核准、採購單與採購入庫，並同步各角色的 request、payload、下載與 Storage read policy；`0062_renderer_metadata_null_guard.sql` 讓 PDF／ERP finalize 對缺失或空白 Storage hash／size metadata fail closed；`0063_reporting_views.sql` 建立 security-invoker 的即時計算報表 views（庫存可用量、需求／發貨、流水、員工發放、換季、採購入庫、ERP 候選與稽核），前端「報表」面板只讀取 views 並沿用底層 RLS，不保存第二份數字；`0064_reporting_receipt_aggregation.sql` 修正分批入庫與更正的 PO line 聚合粒度，避免同一明細多張入庫單造成進度倍增；`0065_inventory_history_source_number.sql` 補上庫存流水對應的來源單號，同時保留 UUID source identity；`0066_inventory_history_source_acl.sql` 以 HR／WAREHOUSE 讀取 policy 補上來源映射表的最小 SELECT 邊界，讓 security-invoker 流水報表能解析來源單號；正式公司版面與字型仍依待提供樣本調整。
+
+## Prototype 交接狀態（2026-08-22）
+
+目前可直接開啟的單檔介面位於 [`prototype/uniform-management-prototype.html`](./prototype/uniform-management-prototype.html)。這是用來確認資訊架構、操作流程與內容命名的 throwaway prototype，不是正式 Next.js／Supabase runtime；狀態只存在瀏覽器記憶體，重新整理會重設資料。
+
+### 開啟與互動
+
+- 直接雙擊 HTML 即可開啟；也可用 `?variant=A`、`?variant=B` 或 `?variant=C` 切換「控制塔／工作佇列／營運地圖」首頁版本。
+- 左側工作區包含「總覽、人資需求、倉庫作業、採購與入庫、換季活動、報表」；表格支援搜尋、排序、分頁、狀態篩選與點擊詳情。
+- 人資需求詳情可依狀態推進「送出申請 → 主管核准 → HR 備貨 → 預留完成 → 已發放」，也可退回補件；新需求建立後會同步產生工作佇列項目。
+- Prototype 目前沒有正式 API、RLS、Storage 或資料庫寫入；需要把流程落地時，請回到 `src/`、`supabase/migrations/` 與 `docs/spec/` 對照實作。
+
+### 目前已確認的內容契約
+
+- 倉庫只有兩個：`人資倉`、`總倉`。庫存資料、倉庫地圖、發放批次與入庫草稿都只能使用這兩個名稱。
+- 人資需求目前只保留：員工姓名、員工編號、機構、需求品項、狀態、更新時間與備註。
+- 人資需求目前不顯示也不保存部門或負責人；後續若要補部門，需先更新資料契約與表單／列表／詳情的整體呈現，不要只在單一畫面加欄位。
+- 人資需求詳情的流程狀態與工作佇列狀態需同步；新建、核准、備貨、預留、發放、退回都應更新兩處顯示。
+- 機構下拉選單順序固定為：
+
+  `8C清福`、`7C清氣`、`6C清心`、`5C清平`、`3C清安`、`8D清春`、`7D清日`、`6D清照`、`5D清風`、`3D清景`、`8E青山`、`7E清泉`、`6E清水`、`5E清清`、`3E清涼`、`2CD清護`、`清福法人`、`一館`、`三館`、`二館`、`清田法人`、`清福幼兒園`、`含笑`、`其他`
+
+### 接手時的最小驗證
+
+從 repository root 執行：
+
+```cmd
+node -e "const fs=require('fs'),vm=require('vm'); const h=fs.readFileSync('prototype/uniform-management-prototype.html','utf8'); new vm.Script(h.split('<script>')[1].split('</script>')[0]); console.log('prototype syntax: ok')"
+npm run lint
+npm test
+npm run typecheck
+npm run build
+git diff --check
+```
+
+修改 prototype 後至少確認：六個工作區可以渲染、需求詳情可以開啟、人資需求可建立與推進、倉庫仍只有兩個名稱、機構清單未被改成示例地名。正式功能修改仍需另外跑 Supabase／RLS／Storage staging smoke，不能只以 HTML prototype 驗收。
