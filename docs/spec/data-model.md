@@ -80,7 +80,7 @@ operation_commands 是命令執行協定，不取代每個來源單／posting／
 
 | 實體 | 主鍵／唯一鍵 | 關鍵欄位與關係 |
 |---|---|---|
-| app_accounts | id uuid PK；auth_user_id uuid UNIQUE NULL；login_name case-insensitive UNIQUE NULL | login_name、display_name、email_snapshot、is_active。login_name 是新帳號必填的 3–50 個小寫 ASCII 英數字登入名稱；email_snapshot 是選填聯絡資料，不作登入用途。既有 email 登入帳號轉換前可暫時沒有 login_name。id 是可還原且不可變的業務帳號識別；auth_user_id 只用來綁定目前 Supabase Auth 身分，不作任何業務 actor FK。 |
+| app_accounts | id uuid PK；auth_user_id uuid UNIQUE NULL；login_name case-insensitive UNIQUE NULL | login_name、display_name、email_snapshot、is_active。login_name 是新帳號必填的 2–50 個小寫 ASCII 英數字登入名稱；email_snapshot 是選填聯絡資料，不作登入用途。既有 email 登入帳號轉換前可暫時沒有 login_name。id 是可還原且不可變的業務帳號識別；auth_user_id 只用來綁定目前 Supabase Auth 身分，不作任何業務 actor FK。 |
 | user_roles | PK (account_id, role_code) | account_id FK app_accounts.id；同一帳號可有多個角色；role_code 僅允許六種已確認角色。 |
 | coordinator_scopes | PK (account_id, institution_id, department_id) | account_id FK app_accounts.id；只供 DEMAND_COORDINATOR；一位窗口可跨機構與部門。department_id 必須屬於同一 institution_id。 |
 | account_auth_binding_events | id PK | account_id、old_auth_user_id、new_auth_user_id、reason、rebound_at、rebound_by_account_id nullable、db_role_snapshot、recovery_ticket、execution_channel。append-only 保存首次綁定、解除與災難復原後重新綁定。 |

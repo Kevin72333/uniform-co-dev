@@ -14,7 +14,7 @@
 
 網站模組提供：
 
-- 建立帳號與登入身份：3–50 個小寫英數字的登入帳號、至少 6 字元的初始密碼及至少一個角色必填；顯示名稱與聯絡 email 選填。server route 先建立 Auth user，再以 `create_account_with_roles` 在同一資料庫交易建立業務帳號與完整角色集合。
+- 建立帳號與登入身份：2–50 個小寫英數字的登入帳號、至少 6 字元的初始密碼及至少一個角色必填；顯示名稱與聯絡 email 選填。server route 先建立 Auth user，再以 `create_account_with_roles` 在同一資料庫交易建立業務帳號與完整角色集合。
 - 修改帳號資料：可修改登入帳號、顯示名稱與選填聯絡 email；只有登入帳號會同步內部 Auth email，聯絡 email 只更新 `email_snapshot`。資料庫失敗時 server 會嘗試回復 Auth 登入身份。
 - 修改密碼：由 server-side `auth.admin.updateUserById` 更新，不保存密碼明文；稽核只記錄「密碼已變更」事件。
 - 啟用／停用：資料庫先更新 `app_accounts.is_active`，Auth 再以 ban 100 年或解除 ban 同步登入限制。
@@ -39,9 +39,11 @@
 
 `0069_account_login_alphanumeric_only.sql` 將 `login_name` 格式進一步限制為 3–50 個小寫 ASCII 英文字母或數字，不再接受句點、底線或連字號。migration 不會自動改寫既有登入帳號，避免讓資料庫名稱與 Auth 登入身份失去同步。
 
+`0070_account_login_minimum_two.sql` 將 `login_name` 最短長度由 3 個字元調整為 2 個字元，其餘字元限制不變。
+
 ## 初次部署操作
 
-1. 由受保護的 Supabase SQL／migration 流程依序套用 `0067_account_admin_profile_and_auth_audit.sql`、`0068_account_login_and_bulk_roles.sql`、`0069_account_login_alphanumeric_only.sql`。
+1. 由受保護的 Supabase SQL／migration 流程依序套用 `0067_account_admin_profile_and_auth_audit.sql`、`0068_account_login_and_bulk_roles.sql`、`0069_account_login_alphanumeric_only.sql`、`0070_account_login_minimum_two.sql`。
 2. 在 Vercel 專案新增 `SUPABASE_SERVICE_ROLE_KEY`，只勾選需要的 Environment；不要使用 GitHub 的 `SUPABASE_ACCESS_TOKEN` 代替，它是 CLI／管理 API token，不是 Auth Admin runtime key。
 3. 重新部署 Vercel，使用既有 SYSTEM_ADMIN 登入。
 4. 在左側「帳號管理」建立第一個非管理員帳號並同時勾選角色；建立後把登入帳號與初始密碼透過核准的安全管道交付並要求使用者登入後更換。

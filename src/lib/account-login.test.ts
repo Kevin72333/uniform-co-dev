@@ -9,7 +9,8 @@ import {
 describe("account login adapter", () => {
   it("normalizes supported login names", () => {
     expect(normalizeAccountLogin("  HRUser01 ")).toBe("hruser01");
-    expect(normalizeAccountLogin("ab")).toBeNull();
+    expect(normalizeAccountLogin("ab")).toBe("ab");
+    expect(normalizeAccountLogin("a")).toBeNull();
     expect(normalizeAccountLogin("hr.user")).toBeNull();
     expect(normalizeAccountLogin("hr_user")).toBeNull();
     expect(normalizeAccountLogin("hr-user")).toBeNull();

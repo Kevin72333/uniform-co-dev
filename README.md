@@ -23,7 +23,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - `WorkspaceShell` 集中處理登入 gate、session refresh、左側工作區導航、網址 hash 切換與共用 topbar；正式工作區為「總覽、帳號管理、人資需求、倉庫作業、採購與入庫、換季活動、報表」七個 workspace。
 - 每個 workspace 的功能由 `src/app/workspaces/*Workspace.tsx` 組裝，模組定義、頁籤名稱與搜尋索引集中在 `src/app/workspaces/workspace-config.ts`；功能頁籤是 tab 切換，不是按鈕把畫面往下捲動。
 - topbar 已包含 workspace 搜尋、通知中心、日期／資料狀態、帳號操作與風格下拉選單；手機版改用工作區下拉選單，桌面版使用左側導航。
-- `AccountAdminPanel` 已獨立在左側「帳號管理」workspace。3–50 個小寫英數字的登入帳號與至少 6 字元密碼必填，聯絡 Email 選填且不作登入用途；建立與編輯時可一次管理多個業務角色（`SYSTEM_ADMIN`、`HR`、`WAREHOUSE`、`PROCUREMENT`、`CEO`、`DEMAND_COORDINATOR`），並支援啟用／停用、需求窗口的機構／部門範圍、Auth 綁定重設／解除，以及保留業務歷史的刪除操作。管理 API 位於 `src/app/api/admin/accounts/route.ts`，server-side 實作位於 `src/server/account-admin.ts`，權限與稽核契約以 `0036_account_role_scope_admin.sql`、`0067_account_admin_profile_and_auth_audit.sql`、`0068_account_login_and_bulk_roles.sql`、`0069_account_login_alphanumeric_only.sql` 為準。
+- `AccountAdminPanel` 已獨立在左側「帳號管理」workspace。2–50 個小寫英數字的登入帳號與至少 6 字元密碼必填，聯絡 Email 選填且不作登入用途；建立與編輯時可一次管理多個業務角色（`SYSTEM_ADMIN`、`HR`、`WAREHOUSE`、`PROCUREMENT`、`CEO`、`DEMAND_COORDINATOR`），並支援啟用／停用、需求窗口的機構／部門範圍、Auth 綁定重設／解除，以及保留業務歷史的刪除操作。管理 API 位於 `src/app/api/admin/accounts/route.ts`，server-side 實作位於 `src/server/account-admin.ts`，權限與稽核契約以 `0036_account_role_scope_admin.sql`、`0067_account_admin_profile_and_auth_audit.sql`、`0068_account_login_and_bulk_roles.sql`、`0069_account_login_alphanumeric_only.sql`、`0070_account_login_minimum_two.sql` 為準。
 - 風格下拉選單與 localStorage key `uniform:appearance-theme` 已提供五套可切換樣式：`AP`（目前 Apple-inspired）、`MX`（修改前 Prototype）、`GS`（GSAP motion；程式 id 保留為 `ga`）、`MB`（product workspace）、`SH`（shadcn/ui-inspired neutral dashboard）。SH 是現有 CSS token adapter，不額外引入 shadcn runtime dependency；樣式集中在 `src/app/globals.css`，選項集中在 `src/app/use-appearance-theme.ts`。
 - 版面基線為 commit `3059723`；若後續只調整視覺，優先沿用 appearance seam，不要把某一套風格的 CSS 寫回共用 base rule，也不要改變 workspace／domain data flow。
 
@@ -94,7 +94,7 @@ Durable import worker 的 forward migrations 為 `0045`–`0048`、`0056`、`005
 
 `0060_pdf_document_type_coverage.sql` 將同一個 snapshot／revision／renderer payload state machine 擴展到發貨、補庫、換季核准、採購單與採購入庫，並同步各角色的 request、payload、下載與 Storage read policy；`0062_renderer_metadata_null_guard.sql` 讓 PDF／ERP finalize 對缺失或空白 Storage hash／size metadata fail closed；`0063_reporting_views.sql` 建立 security-invoker 的即時計算報表 views（庫存可用量、需求／發貨、流水、員工發放、換季、採購入庫、ERP 候選與稽核），前端「報表」面板只讀取 views 並沿用底層 RLS，不保存第二份數字；`0064_reporting_receipt_aggregation.sql` 修正分批入庫與更正的 PO line 聚合粒度，避免同一明細多張入庫單造成進度倍增；`0065_inventory_history_source_number.sql` 補上庫存流水對應的來源單號，同時保留 UUID source identity；`0066_inventory_history_source_acl.sql` 以 HR／WAREHOUSE 讀取 policy 補上來源映射表的最小 SELECT 邊界，讓 security-invoker 流水報表能解析來源單號；正式公司版面與字型仍依待提供樣本調整。
 
-`0067_account_admin_profile_and_auth_audit.sql` 補齊帳號基本資料與 Auth Admin 安全事件稽核；`0068_account_login_and_bulk_roles.sql` 將登入帳號與選填聯絡 Email 分離，新增唯一 `login_name`，並讓建立帳號與多角色指派在同一資料庫交易完成；`0069_account_login_alphanumeric_only.sql` 再將登入帳號格式收斂為 3–50 個小寫英數字。既有 Email 登入在管理員指派登入帳號前仍可相容使用。
+`0067_account_admin_profile_and_auth_audit.sql` 補齊帳號基本資料與 Auth Admin 安全事件稽核；`0068_account_login_and_bulk_roles.sql` 將登入帳號與選填聯絡 Email 分離，新增唯一 `login_name`，並讓建立帳號與多角色指派在同一資料庫交易完成；`0069_account_login_alphanumeric_only.sql` 將登入帳號限制為小寫英數字，`0070_account_login_minimum_two.sql` 再將最短長度調整為 2 個字元。既有 Email 登入在管理員指派登入帳號前仍可相容使用。
 
 ## Prototype 交接狀態（2026-08-22）
 

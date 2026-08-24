@@ -95,7 +95,7 @@ function loginNameValue(value: unknown): string {
   }
   const result = normalizeAccountLogin(value);
   if (!result) {
-    throw new AccountAdminError("登入帳號須為 3–50 個小寫英數字。");
+    throw new AccountAdminError("登入帳號須為 2–50 個小寫英數字。");
   }
   return result;
 }

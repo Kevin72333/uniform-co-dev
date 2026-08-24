@@ -1,4 +1,4 @@
-export const ACCOUNT_LOGIN_PATTERN = /^[a-z0-9]{3,50}$/;
+export const ACCOUNT_LOGIN_PATTERN = /^[a-z0-9]{2,50}$/;
 
 const INTERNAL_AUTH_EMAIL_DOMAIN = "auth.uniform-co.invalid";
 
