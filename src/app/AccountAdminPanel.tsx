@@ -267,7 +267,7 @@ export default function AccountAdminPanel() {
     </div>
     <div className="subheading account-create-heading"><h3>新增帳號</h3><span>帳號、密碼、角色與理由完成後送出</span></div>
     <div className="form-grid">
-      <label className="field"><span>登入帳號（必填）</span><input autoComplete="username" value={loginName} onChange={(event) => { resetOperation("create"); setLoginName(event.target.value); }} disabled={busy} placeholder="例如 hr01" /></label>
+      <label className="field"><span>登入帳號（3–50 個小寫英數字）</span><input autoComplete="username" value={loginName} onChange={(event) => { resetOperation("create"); setLoginName(event.target.value); }} disabled={busy} placeholder="例如 hr01" /></label>
       <label className="field"><span>初始密碼（至少 6 字元）</span><input autoComplete="new-password" type="password" value={password} onChange={(event) => { resetOperation("create"); setPassword(event.target.value); }} disabled={busy} /></label>
       <label className="field"><span>顯示名稱（選填，預設同帳號）</span><input value={displayName} onChange={(event) => { resetOperation("create"); setDisplayName(event.target.value); }} disabled={busy} /></label>
       <label className="field"><span>聯絡 Email（選填，不作登入）</span><input autoComplete="email" type="email" value={email} onChange={(event) => { resetOperation("create"); setEmail(event.target.value); }} disabled={busy} /></label>
@@ -284,7 +284,7 @@ export default function AccountAdminPanel() {
       <div className="increase-list">
         <div className="subheading"><h3>帳號資料</h3><span>{selected.auth_user_id ? "登入身份由 server-side Auth Admin 同步" : "尚未綁定登入身份"}</span></div>
         <div className="form-grid">
-          <label className="field"><span>登入帳號（必填）</span><input autoComplete="username" value={editLoginName} onChange={(event) => { resetOperation("profile"); setEditLoginName(event.target.value); }} disabled={busy} /></label>
+          <label className="field"><span>登入帳號（3–50 個小寫英數字）</span><input autoComplete="username" value={editLoginName} onChange={(event) => { resetOperation("profile"); setEditLoginName(event.target.value); }} disabled={busy} /></label>
           <label className="field"><span>顯示名稱</span><input value={editDisplayName} onChange={(event) => { resetOperation("profile"); setEditDisplayName(event.target.value); }} disabled={busy} /></label>
           <label className="field"><span>聯絡 Email（選填，不作登入）</span><input autoComplete="email" type="email" value={editEmail} onChange={(event) => { resetOperation("profile"); setEditEmail(event.target.value); }} disabled={busy} /></label>
         </div>

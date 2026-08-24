@@ -95,7 +95,7 @@ function loginNameValue(value: unknown): string {
   }
   const result = normalizeAccountLogin(value);
   if (!result) {
-    throw new AccountAdminError("登入帳號須為 3–50 個小寫英數字，可使用句點、底線或連字號，且必須以英數字開頭。");
+    throw new AccountAdminError("登入帳號須為 3–50 個小寫英數字。");
   }
   return result;
 }
