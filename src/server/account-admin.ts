@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { canonicalFingerprint } from "@/src/lib/fingerprint";
+import { authEmailForAccountLogin, normalizeAccountLogin } from "@/src/lib/account-login";
 
 export const ACCOUNT_ROLES = [
   "SYSTEM_ADMIN",
@@ -13,18 +14,20 @@ export const ACCOUNT_ROLES = [
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
 
 export type AccountAdminOperation =
-  | { operation: "create"; email: string; display_name: string; password: string; idempotency_key: string }
-  | { operation: "update_profile"; account_id: string; email: string; display_name: string; reason: string; idempotency_key: string }
+  | { operation: "create"; login_name: string; email: string | null; display_name: string; password: string; role_codes: AccountRole[]; reason: string; idempotency_key: string }
+  | { operation: "update_profile"; account_id: string; login_name: string; email: string | null; display_name: string; reason: string; idempotency_key: string }
   | { operation: "set_password"; account_id: string; password: string; reason: string; idempotency_key: string }
   | { operation: "set_status"; account_id: string; is_active: boolean; reason: string; idempotency_key: string }
   | { operation: "delete"; account_id: string; reason: string; idempotency_key: string }
   | { operation: "set_role"; account_id: string; role_code: AccountRole; is_enabled: boolean; reason: string; idempotency_key: string }
+  | { operation: "set_roles"; account_id: string; role_codes: AccountRole[]; reason: string; idempotency_key: string }
   | { operation: "set_scope"; account_id: string; institution_id: string; department_id: string; is_enabled: boolean; reason: string; idempotency_key: string }
   | { operation: "rebind"; account_id: string; new_auth_user_id: string | null; reason: string; recovery_ticket: string | null; idempotency_key: string };
 
 export type AccountRecord = {
   id: string;
   auth_user_id: string | null;
+  login_name: string | null;
   display_name: string;
   email_snapshot: string | null;
   is_active: boolean;
@@ -81,6 +84,22 @@ function emailValue(value: unknown): string {
   return result;
 }
 
+function optionalEmailValue(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  return emailValue(value);
+}
+
+function loginNameValue(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new AccountAdminError("登入帳號格式不正確。");
+  }
+  const result = normalizeAccountLogin(value);
+  if (!result) {
+    throw new AccountAdminError("登入帳號須為 3–50 個小寫英數字，可使用句點、底線或連字號，且必須以英數字開頭。");
+  }
+  return result;
+}
+
 function passwordValue(value: unknown): string {
   if (typeof value !== "string" || value.length < 12 || value.length > 256) {
     throw new AccountAdminError("密碼至少 12 個字元，且不可超過 256 個字元。");
@@ -103,6 +122,17 @@ function roleValue(value: unknown): AccountRole {
   return value as AccountRole;
 }
 
+function roleListValue(value: unknown): AccountRole[] {
+  if (!Array.isArray(value)) {
+    throw new AccountAdminError("角色清單格式不正確。");
+  }
+  const result = [...new Set(value.map(roleValue))].sort();
+  if (result.length === 0) {
+    throw new AccountAdminError("請至少選擇一個角色權限。");
+  }
+  return result;
+}
+
 function booleanValue(value: unknown, label: string): boolean {
   if (typeof value !== "boolean") {
     throw new AccountAdminError(`${label}格式不正確。`);
@@ -120,19 +150,26 @@ function normalizeOperation(input: AccountAdminOperation): AccountAdminOperation
     throw new AccountAdminError("帳號管理操作不正確。");
   }
   switch (input.operation) {
-    case "create":
+    case "create": {
+      const loginName = loginNameValue(input.login_name);
+      const displayName = optionalText(input.display_name, "顯示名稱", 200) ?? loginName;
       return {
         operation: "create",
-        email: emailValue(input.email),
-        display_name: textValue(input.display_name, "顯示名稱", 200),
+        login_name: loginName,
+        email: optionalEmailValue(input.email),
+        display_name: displayName,
         password: passwordValue(input.password),
+        role_codes: roleListValue(input.role_codes),
+        reason: reasonValue(input.reason),
         idempotency_key: idempotencyValue(input.idempotency_key),
       };
+    }
     case "update_profile":
       return {
         operation: "update_profile",
         account_id: uuidValue(input.account_id, "帳號 ID"),
-        email: emailValue(input.email),
+        login_name: loginNameValue(input.login_name),
+        email: optionalEmailValue(input.email),
         display_name: textValue(input.display_name, "顯示名稱", 200),
         reason: reasonValue(input.reason),
         idempotency_key: idempotencyValue(input.idempotency_key),
@@ -166,6 +203,14 @@ function normalizeOperation(input: AccountAdminOperation): AccountAdminOperation
         account_id: uuidValue(input.account_id, "帳號 ID"),
         role_code: roleValue(input.role_code),
         is_enabled: booleanValue(input.is_enabled, "角色狀態"),
+        reason: reasonValue(input.reason),
+        idempotency_key: idempotencyValue(input.idempotency_key),
+      };
+    case "set_roles":
+      return {
+        operation: "set_roles",
+        account_id: uuidValue(input.account_id, "帳號 ID"),
+        role_codes: roleListValue(input.role_codes),
         reason: reasonValue(input.reason),
         idempotency_key: idempotencyValue(input.idempotency_key),
       };
@@ -256,7 +301,7 @@ async function rpc<T>(client: AccountAdminClient, functionName: string, args: Re
 async function getAccount(client: AccountAdminClient, accountId: string): Promise<AccountRecord> {
   const { data, error } = await client
     .from("app_accounts")
-    .select("id,auth_user_id,display_name,email_snapshot,is_active")
+    .select("id,auth_user_id,login_name,display_name,email_snapshot,is_active")
     .eq("id", accountId)
     .maybeSingle();
   if (error || !data) {
@@ -282,11 +327,11 @@ async function recordSecurityEvent(
   });
 }
 
-async function findAuthUserByCreateKey(adminClient: AccountAdminClient, email: string, createKey: string): Promise<User | null> {
+async function findAuthUserByCreateKey(adminClient: AccountAdminClient, authEmail: string, createKey: string): Promise<User | null> {
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 100 });
     if (error) throw new AccountAdminError(`查詢 Auth 使用者失敗：${error.message}`, 502);
-    const match = data.users.find((user) => user.email?.toLowerCase() === email && user.user_metadata?.uniform_create_key === createKey);
+    const match = data.users.find((user) => user.email?.toLowerCase() === authEmail && user.user_metadata?.uniform_create_key === createKey);
     if (match) return match;
     if (data.users.length < 100) return null;
   }
@@ -298,17 +343,22 @@ async function createAccount(
   adminClient: AccountAdminClient,
   operation: Extract<AccountAdminOperation, { operation: "create" }>,
 ): Promise<AccountAdminResult> {
-  const userMetadata = { display_name: operation.display_name, uniform_create_key: operation.idempotency_key };
+  const authEmail = authEmailForAccountLogin(operation.login_name);
+  const userMetadata = {
+    display_name: operation.display_name,
+    login_name: operation.login_name,
+    uniform_create_key: operation.idempotency_key,
+  };
   let authUser: User | null = null;
   let createdInThisRequest = false;
   const created = await adminClient.auth.admin.createUser({
-    email: operation.email,
+    email: authEmail,
     password: operation.password,
     email_confirm: true,
     user_metadata: userMetadata,
   });
   if (created.error) {
-    authUser = await findAuthUserByCreateKey(adminClient, operation.email, operation.idempotency_key);
+    authUser = await findAuthUserByCreateKey(adminClient, authEmail, operation.idempotency_key);
     if (!authUser) {
       throw new AccountAdminError(`建立登入身份失敗：${created.error.message}`, 502);
     }
@@ -320,14 +370,20 @@ async function createAccount(
 
   const payload = {
     auth_user_id: authUser.id,
+    login_name: operation.login_name,
     display_name: operation.display_name,
     email_snapshot: operation.email,
+    role_codes: operation.role_codes,
+    reason: operation.reason,
   };
   try {
-    const account = await rpc<AccountRecord>(client, "create_account_profile", {
+    const account = await rpc<AccountRecord>(client, "create_account_with_roles", {
       p_auth_user_id: authUser.id,
+      p_login_name: operation.login_name,
       p_display_name: operation.display_name,
       p_email_snapshot: operation.email,
+      p_role_codes: operation.role_codes,
+      p_reason: operation.reason,
       p_idempotency_key: operation.idempotency_key,
       p_request_fingerprint: await canonicalFingerprint(payload),
     });
@@ -353,28 +409,36 @@ async function updateProfile(
 ): Promise<AccountAdminResult> {
   const current = await getAccount(client, operation.account_id);
   let currentAuthEmail: string | null = null;
-  const emailChanged = current.email_snapshot?.toLowerCase() !== operation.email;
-  if (emailChanged && current.auth_user_id) {
+  let currentUserMetadata: Record<string, unknown> | null = null;
+  const loginChanged = current.login_name !== operation.login_name;
+  if (current.auth_user_id) {
     const authUser = await adminClient.auth.admin.getUserById(current.auth_user_id);
     if (authUser.error || !authUser.data.user) {
-      throw new AccountAdminError(`讀取原登入 email 失敗：${authUser.error?.message ?? "Auth 使用者不存在"}`, 502);
+      throw new AccountAdminError(`讀取原登入身份失敗：${authUser.error?.message ?? "Auth 使用者不存在"}`, 502);
     }
     currentAuthEmail = authUser.data.user.email ?? null;
+    currentUserMetadata = authUser.data.user.user_metadata;
     const updated = await adminClient.auth.admin.updateUserById(current.auth_user_id, {
-      email: operation.email,
-      email_confirm: true,
+      ...(loginChanged ? { email: authEmailForAccountLogin(operation.login_name), email_confirm: true } : {}),
+      user_metadata: {
+        ...authUser.data.user.user_metadata,
+        display_name: operation.display_name,
+        login_name: operation.login_name,
+      },
     });
-    if (updated.error) throw new AccountAdminError(`更新登入 email 失敗：${updated.error.message}`, 502);
+    if (updated.error) throw new AccountAdminError(`更新登入身份失敗：${updated.error.message}`, 502);
   }
   const payload = {
     account_id: operation.account_id,
+    login_name: operation.login_name,
     display_name: operation.display_name,
     email_snapshot: operation.email,
     reason: operation.reason,
   };
   try {
-    const account = await rpc<AccountRecord>(client, "update_account_profile", {
+    const account = await rpc<AccountRecord>(client, "update_account_profile_v2", {
       p_account_id: operation.account_id,
+      p_login_name: operation.login_name,
       p_display_name: operation.display_name,
       p_email_snapshot: operation.email,
       p_reason: operation.reason,
@@ -383,8 +447,11 @@ async function updateProfile(
     });
     return { account };
   } catch (error) {
-    if (emailChanged && current.auth_user_id && currentAuthEmail) {
-      await adminClient.auth.admin.updateUserById(current.auth_user_id, { email: currentAuthEmail, email_confirm: true }).catch(() => undefined);
+    if (current.auth_user_id) {
+      await adminClient.auth.admin.updateUserById(current.auth_user_id, {
+        ...(loginChanged && currentAuthEmail ? { email: currentAuthEmail, email_confirm: true } : {}),
+        ...(currentUserMetadata ? { user_metadata: currentUserMetadata } : {}),
+      }).catch(() => undefined);
     }
     throw error;
   }
@@ -486,6 +553,21 @@ async function setRole(client: AccountAdminClient, operation: Extract<AccountAdm
   return { account };
 }
 
+async function setRoles(client: AccountAdminClient, operation: Extract<AccountAdminOperation, { operation: "set_roles" }>): Promise<AccountAdminResult> {
+  const account = await rpc<AccountRecord>(client, "replace_account_roles", {
+    p_account_id: operation.account_id,
+    p_role_codes: operation.role_codes,
+    p_reason: operation.reason,
+    p_idempotency_key: operation.idempotency_key,
+    p_request_fingerprint: await canonicalFingerprint({
+      account_id: operation.account_id,
+      role_codes: operation.role_codes,
+      reason: operation.reason,
+    }),
+  });
+  return { account };
+}
+
 async function setScope(client: AccountAdminClient, operation: Extract<AccountAdminOperation, { operation: "set_scope" }>): Promise<AccountAdminResult> {
   await rpc(client, "set_coordinator_scope", {
     p_account_id: operation.account_id,
@@ -531,6 +613,8 @@ export async function executeAccountAdminOperation(
       return deleteAccount(client, authAdminClient ?? createAuthAdminClient(), actor, operation);
     case "set_role":
       return setRole(client, operation);
+    case "set_roles":
+      return setRoles(client, operation);
     case "set_scope":
       return setScope(client, operation);
     case "rebind":

@@ -15,6 +15,7 @@ import WarehouseWorkspace from "./workspaces/WarehouseWorkspace";
 import { isWorkspaceId, type WorkspaceId, workspaceDefinitions } from "./workspaces/workspace-config";
 import { type AppearanceTheme, useAppearanceTheme } from "./use-appearance-theme";
 import { useWorkspaceMotion } from "./use-workspace-motion";
+import { accountLabelFromUser } from "@/src/lib/account-login";
 
 function WorkspaceIcon({ name }: { name: (typeof workspaceDefinitions)[number]["icon"] }) {
   const common = { width: 17, height: 17, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
@@ -79,6 +80,7 @@ export default function WorkspaceShell() {
   const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
   const activeModule = activeModuleByWorkspace[activeWorkspace] ?? activeDefinition.modules[0].anchor;
+  const accountLabel = user ? accountLabelFromUser(user) : "已登入帳號";
 
   useEffect(() => {
     const syncWorkspace = () => setActiveWorkspace(workspaceFromUrl());
@@ -160,9 +162,9 @@ export default function WorkspaceShell() {
 
         <div className="app-sidebar-bottom">
           <div className="app-user-chip">
-            <span className="app-avatar" aria-hidden="true">{(user.email?.[0] ?? "U").toUpperCase()}</span>
+            <span className="app-avatar" aria-hidden="true">{(accountLabel[0] ?? "U").toUpperCase()}</span>
             <div>
-              <strong>{user.email ?? "已登入帳號"}</strong>
+              <strong>{accountLabel}</strong>
               <span>角色與資料範圍由 RLS 判定</span>
             </div>
           </div>

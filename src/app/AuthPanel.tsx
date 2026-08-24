@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
+import { authEmailForLoginIdentifier } from "@/src/lib/account-login";
 
 export default function AuthPanel() {
   const client = getSupabaseBrowserClient();
-  const [email, setEmail] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,10 +29,15 @@ export default function AuthPanel() {
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const authEmail = authEmailForLoginIdentifier(loginIdentifier);
+    if (!authEmail) {
+      setMessage("登入帳號格式不正確；請輸入至少 3 個英數字，或使用既有 Email 帳號登入。");
+      return;
+    }
     setBusy(true);
     setMessage("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setMessage(error ? error.message : "登入成功");
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
+    setMessage(error ? "帳號或密碼不正確。" : "登入成功");
     setBusy(false);
   }
 
@@ -40,12 +46,12 @@ export default function AuthPanel() {
       <div>
         <p className="eyebrow">ACCOUNT / INVITED USERS</p>
         <h2>登入後使用正式資料</h2>
-        <p className="auth-message">請使用已建立的 Supabase Auth 帳號登入。登入前不會載入任何工作區；角色與需求窗口範圍由資料庫 RLS 控制。</p>
+        <p className="auth-message">請使用管理員建立的登入帳號與密碼。既有使用者仍可暫時使用原本的 Email 登入；角色與需求窗口範圍由資料庫 RLS 控制。</p>
       </div>
       <form className="auth-form" onSubmit={signIn}>
         <label className="field">
-          <span>電子信箱</span>
-          <input autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <span>登入帳號</span>
+          <input autoComplete="username" value={loginIdentifier} onChange={(event) => setLoginIdentifier(event.target.value)} required />
         </label>
         <label className="field">
           <span>密碼</span>

@@ -9,6 +9,7 @@ import {
   type WorkspaceSearchResult,
 } from "./workspaces/workspace-config";
 import { appearanceThemes, type AppearanceTheme } from "./use-appearance-theme";
+import { accountLabelFromUser } from "@/src/lib/account-login";
 
 type NotificationItem = {
   id: string;
@@ -113,6 +114,7 @@ export default function WorkspaceTopbar({ activeDefinition, user, appearanceThem
   const [signingOut, setSigningOut] = useState(false);
   const results = searchWorkspaceModules(query);
   const unreadCount = notifications.filter((notification) => notification.unread).length;
+  const accountLabel = accountLabelFromUser(user);
 
   useEffect(() => {
     function closeTransientPanels(event: KeyboardEvent) {
@@ -202,7 +204,7 @@ export default function WorkspaceTopbar({ activeDefinition, user, appearanceThem
         <span className="workspace-date-pill">正式資料工作區</span>
         <span className="status-pill">SUPABASE + RLS</span>
         <div className="workspace-account-actions">
-          <span className="workspace-account-email" title={user.email ?? "已登入帳號"}>{user.email ?? "已登入帳號"}</span>
+          <span className="workspace-account-email" title={accountLabel}>{accountLabel}</span>
           <button className="secondary-button workspace-signout" type="button" onClick={() => void signOut()} disabled={signingOut}>
             {signingOut ? "登出中…" : "登出"}
           </button>

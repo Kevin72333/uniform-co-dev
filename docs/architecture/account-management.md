@@ -6,20 +6,20 @@
 
 模組分成三個責任：
 
-- `app_accounts` 保存不可變的業務帳號、顯示名稱、email 快照、啟用狀態與歷史關聯。
+- `app_accounts` 保存不可變的業務帳號 ID、唯一 `login_name`、顯示名稱、選填聯絡 email、啟用狀態與歷史關聯。既有 email 登入帳號在轉換前允許 `login_name` 暫時為 NULL。
 - `user_roles` 與 `coordinator_scopes` 保存角色和需求窗口的資料庫權限。
-- Supabase Auth 保存登入 email、密碼雜湊與登入 session；密碼不會寫入 `app_accounts` 或前端狀態。
+- Supabase Auth 保存由登入帳號衍生的內部不可投遞 email、密碼雜湊與登入 session；聯絡 email 不作登入用途，密碼不會寫入 `app_accounts` 或前端狀態。
 
 ## 已提供的管理操作
 
 網站模組提供：
 
-- 建立帳號與登入身份：輸入顯示名稱、email、初始密碼；server route 先建立 Auth user，再以 `create_account_profile` 建立業務帳號。
-- 修改帳號資料：修改顯示名稱與 email；email 會同步 Auth 與 `email_snapshot`，資料庫失敗時 server 會嘗試回復 Auth email。
+- 建立帳號與登入身份：登入帳號、至少 12 字元的初始密碼及至少一個角色必填；顯示名稱與聯絡 email 選填。server route 先建立 Auth user，再以 `create_account_with_roles` 在同一資料庫交易建立業務帳號與完整角色集合。
+- 修改帳號資料：可修改登入帳號、顯示名稱與選填聯絡 email；只有登入帳號會同步內部 Auth email，聯絡 email 只更新 `email_snapshot`。資料庫失敗時 server 會嘗試回復 Auth 登入身份。
 - 修改密碼：由 server-side `auth.admin.updateUserById` 更新，不保存密碼明文；稽核只記錄「密碼已變更」事件。
 - 啟用／停用：資料庫先更新 `app_accounts.is_active`，Auth 再以 ban 100 年或解除 ban 同步登入限制。
 - 刪除登入身份：先停用業務帳號，再刪除 Auth user，最後解除 `auth_user_id` 綁定；業務歷史與 actor FK 保留，不直接刪除 `app_accounts`。
-- 六角色與需求窗口範圍：沿用 `0036_account_role_scope_admin.sql` 的受保護 RPC、冪等鍵與最後一位 SYSTEM_ADMIN 防線。
+- 六角色與需求窗口範圍：`replace_account_roles` 可一次取代完整角色集合，仍保留冪等鍵、最後一位 SYSTEM_ADMIN 防線，移除 `DEMAND_COORDINATOR` 時也會撤銷範圍；窗口機構／部門範圍仍使用獨立受保護 RPC。
 - Auth 綁定重設／解除：僅供帳號移交、復原等進階情境，仍要求理由與 recovery ticket。
 
 ## 安全 seam
@@ -35,14 +35,16 @@
 
 兩個 RPC 都使用 `operation_commands` 冪等鍵，並只授權 `authenticated`；`public` 與 `anon` 均撤銷執行權限。
 
+`0068_account_login_and_bulk_roles.sql` 新增 `login_name`、唯一格式防線，以及 `create_account_with_roles`、`update_account_profile_v2`、`replace_account_roles`。新帳號的 Auth email 固定由登入帳號映射至保留的 `.invalid` 網域，不會寄送郵件；登入畫面仍接受既有 Email，讓舊帳號可在 SYSTEM_ADMIN 指派 `login_name` 前繼續登入。
+
 ## 初次部署操作
 
-1. 由受保護的 Supabase SQL／migration 流程套用 `0067_account_admin_profile_and_auth_audit.sql`。
+1. 由受保護的 Supabase SQL／migration 流程依序套用 `0067_account_admin_profile_and_auth_audit.sql`、`0068_account_login_and_bulk_roles.sql`。
 2. 在 Vercel 專案新增 `SUPABASE_SERVICE_ROLE_KEY`，只勾選需要的 Environment；不要使用 GitHub 的 `SUPABASE_ACCESS_TOKEN` 代替，它是 CLI／管理 API token，不是 Auth Admin runtime key。
 3. 重新部署 Vercel，使用既有 SYSTEM_ADMIN 登入。
-4. 在「總覽 → 帳號與正式資料基礎」建立第一個非管理員帳號，接著指派角色；建立後把初始密碼透過核准的安全管道交付並要求使用者登入後更換。
+4. 在左側「帳號管理」建立第一個非管理員帳號並同時勾選角色；建立後把登入帳號與初始密碼透過核准的安全管道交付並要求使用者登入後更換。
 5. 以 staging 帳號驗證建立、資料修改、改密碼、停用、刪除登入身份、角色、需求窗口範圍，以及最後一位 SYSTEM_ADMIN 不可被停用／移除。
 
 ## 邊界
 
-資料庫 migration 與程式碼已提供正式管理流程，但 Supabase project 的 Auth Admin key、初始 SYSTEM_ADMIN seed、email provider 設定及 staging／production smoke 仍需在實際環境完成。未設定 `SUPABASE_SERVICE_ROLE_KEY` 時，列表與資料庫內的角色／範圍操作仍可讀取或依 RPC 驗證，但建立、改密碼、同步 email、啟用／停用 Auth 登入與刪除登入身份會 fail closed。
+資料庫 migration 與程式碼已提供正式管理流程，但 Supabase project 的 Auth Admin key、初始 SYSTEM_ADMIN seed 及 staging／production smoke 仍需在實際環境完成。未設定 `SUPABASE_SERVICE_ROLE_KEY` 時，列表與資料庫內的角色／範圍操作仍可讀取或依 RPC 驗證，但建立、改密碼、同步登入帳號、啟用／停用 Auth 登入與刪除登入身份會 fail closed。
