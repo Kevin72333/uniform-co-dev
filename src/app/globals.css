@@ -88,6 +88,10 @@ dd { font-size: 20px; font-weight: 800; margin: 0; }
 .admin-account-row span:first-child { min-width: 0; }
 .admin-account-row small { color: var(--muted); display: block; font-size: 12px; margin-top: 4px; }
 .admin-controls { margin-top: 20px; }
+.account-admin-feedback { margin: 16px 0; }
+.account-directory { margin-top: 20px; }
+.account-directory-list { margin-top: 12px; }
+.account-create-heading { margin: 28px 0 16px; }
 .role-fieldset { border: 0; margin: 20px 0 0; padding: 0; }
 .role-fieldset legend { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
 .role-check-grid { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
