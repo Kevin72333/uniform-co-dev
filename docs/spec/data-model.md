@@ -426,7 +426,7 @@ purchase receipt POST、PURCHASE_RECEIPT correction、purchase_order_line_change
 | 實體 | 主鍵／唯一鍵 | 關鍵欄位與關係 |
 |---|---|---|
 | system_cutover_state | singleton_key PK 且固定 GLOBAL | status（PRE_CUTOVER／LIVE）、opening_import_batch_id UNIQUE、opening_posting_id UNIQUE、live_at/by、row_version；migration 預建且永遠只有一列。 |
-| import_batches | id PK；batch_no UNIQUE | import_type、status、original_filename、expected_mime_type、expected_size_bytes、file_sha256、storage_object_key UNIQUE、upload_expires_at、mapping_version、processing_cursor、cursor_version、lease_token、lease_generation、lease_owner、lease_expires_at、attempt_count、max_attempts、next_retry_at、last_error_code、last_error_message、upload_started_at/by、uploaded_at/by、validated_at、applied_at/by、row counts。 |
+| import_batches | id PK；batch_no UNIQUE | import_type、status、original_filename、expected_mime_type、expected_size_bytes、file_sha256、storage_object_key UNIQUE、upload_expires_at、mapping_version、processing_cursor、cursor_version、lease_token、lease_generation、lease_owner、lease_expires_at、attempt_count、max_attempts、next_retry_at、last_error_code、last_error_message、upload_started_at/by、uploaded_at/by、validated_at、applied_at/by、terminal_at、staging_purged_at、row counts。`terminal_at` 是 FAILED／CANCELLED retention episode 的資料庫時鐘；`staging_purged_at` 只可在該 episode 滿 90 天後由專用 retention RPC 設定。 |
 | import_batch_chunks | id PK；UNIQUE (batch_id, phase, chunk_no)；idempotency_key UNIQUE | batch_id、phase、start_row_number、end_row_number、status、processing_cursor、cursor_version、lease_token、lease_generation、lease_owner、lease_expires_at、attempt_count、next_retry_at、last_error_code、last_error_message、started_at、completed_at。phase 至少有 PARSE、VALIDATE。 |
 | import_rows | id PK；UNIQUE (batch_id, row_number) | raw_values jsonb、normalized_values jsonb、proposed_action、validation_errors jsonb、target_entity_id、applied_at。 |
 | import_field_diffs | id PK；UNIQUE (import_row_id, field_name) | old_value jsonb、new_value jsonb、confirmed。 |
@@ -454,7 +454,7 @@ import_type 至少支援機構、部門、員工、制服品號、供應商、�
 - 可重試錯誤保存 last_error_code／last_error_message 並以 next_retry_at 排程；attempt_count 到 max_attempts 後轉 FAILED。錯誤欄位不得保存密碼、token 或完整敏感資料。
 - 所有 PARSE 與 VALIDATE chunks COMPLETED 且無驗證錯誤後才能轉 VALIDATED。APPLYING 必須持有有效 batch fencing lease；APPLIED 只能由最終套用交易設定，且正式資料寫入、operation_commands 成功結果與 APPLIED 必須同一交易提交。相同套用 idempotency key 重送回傳原結果，不得再寫主檔或期初流水。
 
-import_rows 保留逐列結果；`APPLIED` 批次及其已套用列、已完成 chunks 與差異資料不可 UPDATE／DELETE。從未套用且已 `FAILED／CANCELLED` 的批次，才可依保存政策在確認沒有正式主檔或期初流水後，以完整 batch 為單位刪除 raw／normalized staging rows 及可重建的 chunk progress；batch header、檔名、file_sha256、行數、操作者與結果摘要中繼資料永久保留。原始檔可另依保存政策清除。file_sha256 用於警示重複檔案，不應單獨設成全域 UNIQUE，因同一檔可能是合法的重新驗證。
+import_rows 保留逐列結果；`APPLIED` 批次及其已套用列、已完成 chunks 與差異資料不可 UPDATE／DELETE。從未套用且已 `FAILED／CANCELLED`、目前 terminal episode 已滿 90 天的批次，`0074_import_staging_payload_retention.sql` 只允許專用 `job_import_retention` RPC 把 `raw_values` 清為 `{}`、`normalized_values` 清為 NULL、`validation_errors` 清為 `[]`，不刪除 row shell、chunk 或 `import_field_diffs`，並在同一交易設定 batch 的 `staging_purged_at`。purge 後該 batch 不可 restart；若需重新處理來源，必須建立新 batch。batch header、檔名、file_sha256、行數、操作者、結果摘要與 purge marker 永久保留；原始 Storage bytes 可另依保存政策由 `job_storage_cleanup` 清除。file_sha256 用於警示重複檔案，不應單獨設成全域 UNIQUE，因同一檔可能是合法的重新驗證。
 
 ## 9. 鼎新 ERP 銷貨匯出
 
@@ -523,7 +523,7 @@ audit_events 由資料庫 trigger 或受控 RPC 寫入，前端無 INSERT／UPDA
 - 所有狀態轉換、過帳、取消、ERP 產生、下載與確認匯入。
 - 權限角色與窗口範圍異動。
 
-已 POSTED／SHIPPED／APPROVED 的業務資料不可變，因此稽核表記錄後續建立的更正或調整關係，而不是偽造對原資料的 UPDATE。audit_events 本身永久 append-only。
+已 POSTED／SHIPPED／APPROVED 的業務資料不可變，因此稽核表記錄後續建立的更正或調整關係，而不是偽造對原資料的 UPDATE。audit_events 本身永久 append-only。durable import 的 `import_rows` 是 retention 例外：`0073_import_staging_audit_minimization.sql` 起只把 id、batch_id、row_number、proposed_action、target_entity_id、applied_at 寫入永久 before／after audit，不複製 raw_values、normalized_values、validation_errors；其他業務 table 維持完整列 audit。既有 audit history 不由該 migration 回寫或刪除。
 
 ### 10.2 A4 PDF
 

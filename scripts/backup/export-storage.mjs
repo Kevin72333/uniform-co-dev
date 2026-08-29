@@ -1,7 +1,14 @@
 #!/usr/bin/env node
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { validateBackupRunId } from "./validate-run-id.mjs";
+
+const execFileAsync = promisify(execFile);
+const verifyManifestScript = fileURLToPath(new URL("./verify-manifest.mjs", import.meta.url));
 
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -12,12 +19,40 @@ const allowedBuckets = new Set(["uniform-imports", "uniform-artifacts", "uniform
 if (!url || !serviceKey || !process.env.BACKUP_ROOT || !runId || buckets.length === 0) {
   throw new Error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUP_ROOT, BACKUP_RUN_ID and BACKUP_STORAGE_BUCKETS are required");
 }
+validateBackupRunId(runId);
 if (buckets.some((bucket) => !allowedBuckets.has(bucket)) || new Set(buckets).size !== buckets.length || buckets.length !== allowedBuckets.size || [...allowedBuckets].some((bucket) => !buckets.includes(bucket))) {
   throw new Error(`BACKUP_STORAGE_BUCKETS must contain exactly: ${[...allowedBuckets].join(", ")}`);
 }
 const runDir = resolve(root, runId);
 const storageRoot = resolve(runDir, "storage");
+const storageManifestPath = join(runDir, "storage-manifest.json");
 if (!storageRoot.startsWith(runDir + "\\") && !storageRoot.startsWith(runDir + "/")) throw new Error("Invalid backup path");
+
+async function pathExists(path) {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+for (const requiredName of ["application.dump", "database-metadata.json", "tool-versions.txt", "auth-data.sql", "auth-metadata.json", "manifest.json"]) {
+  const requiredPath = join(runDir, requiredName);
+  let info;
+  try {
+    info = await stat(requiredPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`Backup generation is incomplete before Storage export: ${requiredName}`);
+    throw error;
+  }
+  if (!info.isFile()) throw new Error(`Backup generation is incomplete before Storage export: ${requiredName}`);
+}
+await execFileAsync(process.execPath, [verifyManifestScript, runDir]);
+if (await pathExists(storageRoot) || await pathExists(storageManifestPath)) {
+  throw new Error(`Refusing to overwrite existing Storage backup for generation: ${runId}`);
+}
 const headers = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
 const objects = [];
 
@@ -60,5 +95,5 @@ for (const bucket of buckets) {
   }
   }
 }
-await writeFile(join(runDir, "storage-manifest.json"), `${JSON.stringify({ schema: "uniform-co-storage-manifest-v1", generatedAt: new Date().toISOString(), buckets, objects }, null, 2)}\n`, { mode: 0o600 });
+await writeFile(storageManifestPath, `${JSON.stringify({ schema: "uniform-co-storage-manifest-v1", generatedAt: new Date().toISOString(), buckets, objects }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
 console.log(`storage_objects=${objects.length}`);

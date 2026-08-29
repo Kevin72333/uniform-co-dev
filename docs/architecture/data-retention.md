@@ -36,7 +36,7 @@
 | 正式 PDF 與鼎新 ERP artifact bytes | 至少 3 年 | 至少與公司正式政策相同 | 先封存、驗證 hash 後才可移除 production object；下載畫面顯示需由封存還原 |
 | 已套用匯入原檔 | 180 天 | 3 年 | 封存成功後移除 production object；永久保留 batch metadata、範本版本及 SHA-256 |
 | 已套用匯入 raw／normalized rows | 系統存續期間 | 隨每日／月備份 | 不清除；它們是 `APPLIED` 批次的不可變正式歷史，必須納入三年 DB 容量投影 |
-| 未套用且已 FAILED／CANCELLED 的 raw／normalized staging | 90 天 | 不要求 | 確認未產生任何正式主檔或期初流水後，以完整 batch 為單位清除 |
+| 未套用且已 FAILED／CANCELLED 的 raw／normalized／validation staging payload | 90 天 | 不要求 | `0074_import_staging_payload_retention.sql` 只把符合資格 batch 的 `import_rows.raw_values` 清為 `{}`、`normalized_values` 清為 NULL、`validation_errors` 清為 `[]`；row shell、batch/chunk metadata、`import_field_diffs` 永久保留，並以 `staging_purged_at` 留下整批清除標記 |
 | 匯入欄位差異及套用結果摘要 | 系統存續期間 | 隨每日／月備份 | 不清除，用於證明哪些主檔被更新 |
 | 匯入錯誤報告 | 90 天 | 不要求 | 到期清除；使用者應下載需要保留的報告 |
 | 草稿 PDF／預覽 | 原則上不保存；不得超過 24 小時 | 不要求 | 可重新產生，直接清除 |
@@ -61,12 +61,16 @@
 
 ### 4.2 清理防線
 
-- retention job 採 dry-run → 人工確認 → 執行；A、B 類資料永遠不出現在候選清單。
+- retention job 採 dry-run → 人工確認 → 執行；A、B 類資料永遠不出現在候選清單。DB staging payload 使用獨立 `npm run retention:import-staging` runner，execute 需 `PURGE_ELIGIBLE_IMPORT_STAGING` 明確 gate；每日 workflow 目前只做 dry-run。
 - 正式 artifact 或 import batch 若找不到來源 id、原 production key 與 source hash 全部相符，且包含 archive object key、manifest hash 與成功驗證時間的 finalized `storage_archive_records`，不得清除線上 bytes。來源本身不新增或回寫 `archived_at`。
-- 清理以完整未套用 batch／artifact version 為單位，不留下缺一半的 staging rows 或來源連結；`APPLIED import_rows` 永遠不列入候選。
-- 現行資料模型未另拆 purgeable payload table；因此第一版只能清理 FAILED／CANCELLED 且證明從未套用的 staging rows。若日後要縮減 APPLIED payload，必須先以 ADR 與 migration 把可清理 payload 和永久逐列結果分表，不可直接放寬既有不可變 trigger。
+- DB staging 清理以完整未套用 batch 為資格邊界，但不 DELETE `import_rows`、`import_batch_chunks` 或 `import_field_diffs`；`APPLIED import_rows` 永遠不列入候選。
+- `0074_import_staging_payload_retention.sql` 只允許目前 terminal episode 已滿 90 天、尚未標記 `staging_purged_at` 的 FAILED／CANCELLED batch 清空 `raw_values`、`normalized_values`、`validation_errors`。batch header、row shell、chunk metadata 與 `import_field_diffs` 永久保留；同一 transaction 最後設定 `staging_purged_at`，已 purge batch 不得 restart，若需要重新匯入必須建立新 batch。
+- 現行資料模型未另拆 purgeable payload table；若日後要縮減 APPLIED payload，必須先以 ADR 與 migration 把可清理 payload 和永久逐列結果分表，不可直接放寬既有不可變 trigger。
+- `0073_import_staging_audit_minimization.sql` 起，`import_rows` 的永久 audit 只保存 id、batch、列號、預計動作、目標實體與套用時間等必要 metadata，不再把 raw values、normalized values 或 validation errors 複製進 append-only `audit_events`；其他正式業務 table 仍保留完整 before／after audit。
+- `0073` 不追溯改寫已存在的 append-only audit。已部署環境若在套用前曾把 staging payload 寫入 `audit_events`，是否需要歷史 remediation 必須由資料 owner／系統 owner 另行核准並以獨立程序處理，不得藉 retention job 偷改永久稽核紀錄。
 - DB 與 Storage 無法共用交易；先封存並以旁掛 record 登記，最後才刪線上 object。刪除／還原各自追加 lifecycle event；失敗可重試，不得回頭改寫 READY／APPLIED 來源或既有 archive record。
 - 所有封存、驗證、清理及失敗皆寫 audit；清理命令使用 idempotency key。
+- Storage bytes cleanup 與 DB staging payload retention 是兩個權限面：前者維持 `job_storage_cleanup`，後者只使用 `job_import_retention`。`job_import_retention` 對 import tables 沒有一般 DML，只能執行 `list_import_staging_retention_candidates`／`purge_import_staging_payload`，並要求同名 LOGIN 與 active job actor binding；不要把 `job_storage_cleanup` 擴權成 DB staging purge worker。
 - retention 的 DB 選取／登記優先使用 job-specific login role 與薄函式 grant；只有 Storage 管理 API 確實需要時才由固定 server-side retention workflow 使用 `service_role`。它不能進瀏覽器，也不能接受任意 bucket／path 作參數。
 
 ## 5. 個資與檔案最小化
@@ -95,6 +99,20 @@
 3. 記錄 `pg_database_size`、各 table／index／TOAST 大小、Storage bucket bytes、egress 與函式用量。
 4. 以實測壓縮率與新增 Storage bytes 換算 30 天備份，再執行一次完整備份及從零還原；備份＋演練 egress 與 GitHub Actions 分鐘都必須低於各自免費額度的 60%，並確認仍可達 RPO／RTO。
 5. 把實測基準、資料生成版本與結果保存於 release 文件；schema 或保存政策重大變更後重跑。
+
+### 6.3 可重複容量規劃 gate
+
+Repository 提供 `scripts/capacity/capacity-plan.mjs`，用版本化 JSON assumptions 重算三年 DB、private Storage 與 30 天備份的規劃值。空白起點使用 `docs/deployment/onboarding/templates/capacity-assumptions.example.json`；正式數值應複製到已被 Git 忽略的 `docs/deployment/onboarding/private/` 或其他受保護位置後填寫，不要把真實營運數量或驗收證據提交到 repository。
+
+執行：
+
+```powershell
+npm run capacity:plan -- --input docs/deployment/onboarding/private/capacity-assumptions.json
+```
+
+工具會 fail closed：缺必備欄位、負值、非有限數字、未知 schema version、P95 小於平均值或最大匯入列數小於平均列數都會拒絕。估算模型會分開顯示 master／transaction／import／audit、index／TOAST／dead tuple／migration headroom，以及 PDF／ERP／匯入原檔的線上保存期間；這些結果只是規劃值，不得當成 `pg_database_size`、實際 Storage bucket bytes 或 production 驗收證據。
+
+只有 `evidence.source=STAGING_SYNTHETIC`、附上可追溯 evidence reference、三年 synthetic 實測 DB／Storage bytes、尖峰效能與還原演練均通過，且 30 天備份＋演練 egress 與 GitHub Actions 分鐘都嚴格低於各自 quota 60% 時，容量工具才會回報 `VALIDATED`。範本或純估算一律是 `NOT_VALIDATED`。
 
 ### 6.3 上線與運行門檻
 

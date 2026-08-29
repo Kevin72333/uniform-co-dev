@@ -9,3 +9,4 @@ coverage/
 *.tsbuildinfo
 supabase/.temp/
 backups/
+docs/deployment/onboarding/private/

@@ -4,9 +4,20 @@ set -euo pipefail
 : "${SUPABASE_DB_URL:?Set SUPABASE_DB_URL to a protected database connection string}"
 : "${BACKUP_ROOT:?Set BACKUP_ROOT to an offsite staging directory outside the repository}"
 run_id="${BACKUP_RUN_ID:?Use the same BACKUP_RUN_ID as export-db.sh}"
-run_dir="$(cd -- "${BACKUP_ROOT}/${run_id}" && pwd)"
 command -v pg_dump >/dev/null || { echo "pg_dump is required" >&2; exit 1; }
 command -v psql >/dev/null || { echo "psql is required" >&2; exit 1; }
+command -v node >/dev/null || { echo "node is required" >&2; exit 1; }
+node scripts/backup/validate-run-id.mjs "${run_id}" >/dev/null
+run_dir="$(cd -- "${BACKUP_ROOT}/${run_id}" && pwd)"
+if [[ -e "${run_dir}/auth-data.sql" || -e "${run_dir}/auth-metadata.json" ]]; then
+  echo "Refusing to overwrite existing Auth backup for generation: ${run_id}" >&2
+  exit 1
+fi
+if [[ ! -f "${run_dir}/application.dump" || ! -f "${run_dir}/database-metadata.json" || ! -f "${run_dir}/tool-versions.txt" || ! -f "${run_dir}/manifest.json" ]]; then
+  echo "Database backup phase is incomplete for generation: ${run_id}" >&2
+  exit 1
+fi
+node scripts/backup/verify-manifest.mjs "${run_dir}" >/dev/null
 
 # Auth is data-only: migrations own application schema, while Auth UUIDs and
 # identity rows must be preserved exactly for actor foreign keys on restore.

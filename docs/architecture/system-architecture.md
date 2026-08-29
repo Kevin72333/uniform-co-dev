@@ -158,9 +158,9 @@ command claim 可先提交，以便其他請求看到 `IN_PROGRESS`；但純資�
 1. `start_batch` 先以冪等命令建立 `AWAITING_UPLOAD` batch、隨機且不可覆寫的 Storage key、預期 MIME／大小與 upload expiry；此時不建立可執行的 parse job。
 2. 瀏覽器只能直接上傳到該 private Storage key，不讓檔案經過 Vercel Function request body；回應遺失時查回同一 batch／key，不另配新 key。
 3. `confirm_upload` 由後端核對固定 key 的 MIME、實際大小、SHA-256 與完成 metadata，吻合後才原子轉 `UPLOADED` 並建立第一批固定列範圍 parse chunks；逾期未確認批次可取消，孤兒 bytes 只在無引用檢查後清理。
-4. `process_next_chunk` 一次只處理固定範圍，job 保存 `processing_cursor`、`lease_token`、`lease_expires_at`、`lease_generation`、`attempt_count`、`next_retry_at` 與 `last_error`。
+4. 受控 import worker 透過 `list_import_work` 取得待處理 batch，再以 `claim_import_chunk` 一次租用一個固定範圍的 PARSE／VALIDATE chunk；job 保存 `processing_cursor`、`lease_token`、`lease_expires_at`、`lease_generation`、`attempt_count`、`next_retry_at` 與 `last_error`。
 5. worker 取得短租約後才能處理；每次接手都遞增 `lease_generation` 作為 fencing token。chunk 寫回交易必須同時比對 `lease_token`、generation、未逾期 `lease_expires_at` 與預期 cursor，否則舊 worker 即使稍後恢復也不得提交。租約逾時可由同一使用者按「繼續」或由後續請求接手；每個 chunk 以唯一鍵及受 fencing 保護的 upsert 保證重跑不重複。
-6. UI 輪詢 `get_batch_status` 並主動呼叫下一塊；關閉頁面只暫停，不丟失進度。重新開啟可從 cursor 繼續。
+6. UI 只負責查詢 durable batch 狀態與呈現確認流程，不直接呼叫 worker RPC。`npm run import:worker` 預設依 `IMPORT_POLL_MS` 持續輪詢並接續可執行的 PARSE／VALIDATE／APPLY；`--once` 僅供單輪 claim／smoke。關閉頁面不會停止已部署的常駐 worker，也不會丟失進度；重新開啟可從 durable batch／cursor 查回目前狀態。實際 staging 是否已有常駐 worker 仍必須以部署 smoke 驗證，不能由版本庫存在 runner 即推定完成。
 7. Vercel Hobby Cron 只每日執行一次逾期租約復原與未引用暫存物件清理；不解析 chunk、不產生正式檔案，也不負責保證一般批次即時完成。
 8. 解析與驗證可分塊，但正式發布使用單一、可回滾的 set-based PostgreSQL 交易；任一錯誤都阻擋整批套用。
 
@@ -169,8 +169,8 @@ command claim 可先提交，以便其他請求看到 `IN_PROGRESS`；但純資�
 ### 7.2 檔案防護與驗證
 
 - 第一版只接受 `.xlsx` 與 `.csv`；拒絕 `.xls`、`.xlsm`、`.xlsb`、巨集、OLE 物件、外部 workbook relationship 及遠端資料連線。
-- 應用層預設上限為單檔 10 MB、每 workbook 20 個 sheet、合計 50,000 列、每 sheet 200 欄、單格 10,000 字元。取得真實樣本後可在容量測試內調低或調高，但不得超過 Supabase Free 單檔上限。
-- XLSX 解壓前先檢查 ZIP entry 數、宣告大小、路徑穿越與壓縮比；預設最多 1,000 個 entry、解壓後 100 MB、單一 entry 25 MB、壓縮比 100:1。超限整批拒絕，不嘗試部分解析。
+- 正式 parser 的預設上限為單檔 10,000,000 bytes、每 workbook 20 個 sheet、合計最多 10,000 列、每列最多 50 欄、全檔最多 500,000 個儲存格、單格最多 1,000,000 字元。worker 跨 sheet flatten 同樣限制總資料列不超過約 10,000；取得真實樣本與容量測試結果後才能調整這些值。
+- XLSX 解壓前先檢查 ZIP entry 數、宣告大小、路徑穿越與壓縮比；正式 parser 預設最多 200 個 entry、累計解壓 50,000,000 bytes、壓縮比 100:1。超限整批拒絕，不嘗試部分解析；任何調高仍不得突破部署與 Supabase 方案的實際限制。
 - 不能只信 ZIP header 宣告值；解壓採串流 byte counter，任何 entry 或累計實際輸出到達上限就中止。XML parser 禁用 DTD、外部 entity、網路與本機檔案 resolver，出現 `DOCTYPE` 即拒絕。
 - 匯入程式不執行公式，也不採信 formula cached result；被映射欄位出現公式時列為錯誤。工號、品號與所有代碼一律按文字處理，保留前導零。
 - 瀏覽器檢查只改善體驗；後端重新檢查檔案類型、結構與每列業務規則，資料庫再驗證唯一鍵、外鍵及正式不變條件。
@@ -278,13 +278,16 @@ production  正式 Vercel＋正式 Supabase
 - 黃金檔測試：鼎新輸出內容、編碼、欄位順序及重複匯入行為。
 - 切換演練：主檔＋期初匯入、總量核對、權限、完整 DB／Auth／Storage 從零還原及三年容量測試。
 
-## 12. 尚待實作前確認
+## 12. 上線前外部確認
 
-1. Next.js 版本與 UI 元件庫。
-2. 正式網域與帳號邀請寄件設定。
-3. PDF 樣式、公司抬頭與簽名欄。
-4. 匯入檔最大實際列數、欄數、檔案大小與尖峰使用量，用來確認第 7.2 節預設限制。
-5. 鼎新成功樣本及測試帳套。
-6. 唯一正式異地備份 remote、兩位解密金鑰保管人、還原責任人及共同維運信箱。
-7. 預期員工數、每年發放／換季／採購／匯入筆數、正式 PDF／ERP 平均大小與保存年限。
-8. 業務負責人對暫定 RPO 24 小時、RTO 8 個工作小時及免費方案停機風險的簽認。
+正式技術基線已確定為 Next.js `^15.5.24`、React `^19.1.1`、自有 React components 與 CSS/theme adapter；`SH` 僅為 shadcn/ui-inspired 外觀，不引入 shadcn runtime dependency，AP／MX／GS／MB／SH 五套 appearance 均保留。
+
+以下項目需要正式環境、真實樣本或業務／維運簽核，不能由本機實作代替；對應收件與驗收資料集中在 `docs/deployment/onboarding/external-acceptance.md`：
+
+1. 正式網域與帳號邀請寄件設定。
+2. PDF 樣式、公司抬頭與簽名欄。
+3. 匯入檔最大實際列數、欄數、檔案大小與尖峰使用量，用來驗證第 7.2 節正式 parser 預設限制是否需要調整。
+4. 鼎新成功樣本及測試帳套。
+5. 唯一正式異地備份 remote、兩位解密金鑰保管人、還原責任人及共同維運信箱。
+6. 預期員工數、每年發放／換季／採購／匯入筆數、正式 PDF／ERP 平均大小與保存年限。
+7. 業務負責人對暫定 RPO 24 小時、RTO 8 個工作小時及免費方案停機風險的簽認。
