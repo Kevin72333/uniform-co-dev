@@ -115,10 +115,11 @@ Renderer runner 位於 `scripts/renderer/renderer-worker.mjs`，Storage proxy �
 ## 7. System Guide 自身
 
 - Markdown source：`docs/system-guide/user-guide.md`、`admin-guide.md`、`agent-guide.md`。
-- Runtime loader/parser：`src/server/system-guide.ts`，只允許固定 allowlist 檔名與有限 block types。
+- 文件定義與 parser：`src/domain/system-guide.ts` 集中三個固定檔名、標題、讀者與有限 block types；`src/server/system-guide.ts` 只讀這份 allowlist。
 - Protected API：`HEAD/GET /api/system-guide`，先用 caller bearer token 執行 `authorizeSystemAdmin()`。
-- Frontend：`/system-guide`；React 以文字節點渲染，不用 `dangerouslySetInnerHTML`。
-- 首頁入口：`WorkspaceShell` 只有在 HEAD probe 成功後顯示；隱藏入口不是授權邊界，GET API 才是最後防線。
+- Frontend：`/system-guide` 仍掛載 `WorkspaceShell initialSystemGuide`，保留原作業台左側導航，右側才呈現 `SystemGuidePageClient`；React 以文字節點渲染，不用 `dangerouslySetInnerHTML`。
+- 即時導覽：文件按鈕直接使用共用 allowlist metadata，不等待文件 GET 才建立；`useSystemGuideAccess` 以 RLS self-read `user_roles` 決定入口、sessionStorage 只快取目前分頁的正向可見狀態，並在背景預取文件。
+- 安全邊界：入口快取不是授權；GET API 每次仍重新驗證 Auth、有效 `app_accounts` 與 `SYSTEM_ADMIN`，角色被移除或 session 失效時會拒絕內容並清除前台快取。
 - CSS：所有新增規則以 `.system-guide-*` scope 限定。
 
 ## 8. 開發、測試與驗證

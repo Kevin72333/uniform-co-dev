@@ -14,6 +14,17 @@ export type SystemGuideDocument = {
   blocks: SystemGuideBlock[];
 };
 
+export const systemGuideDocumentDefinitions: ReadonlyArray<{
+  id: SystemGuideDocumentId;
+  fileName: string;
+  title: string;
+  audience: string;
+}> = [
+  { id: "user", fileName: "user-guide.md", title: "使用者操作說明", audience: "日常作業與各業務角色" },
+  { id: "admin", fileName: "admin-guide.md", title: "管理者設定說明", audience: "SYSTEM_ADMIN 與平台維運者" },
+  { id: "agent", fileName: "agent-guide.md", title: "AI Agent 交接說明", audience: "開發、維護與 DevOps Agent" },
+];
+
 const MAX_SOURCE_LENGTH = 300_000;
 const MAX_BLOCKS = 2_000;
 const UNSAFE_MARKUP = /<\s*(script|iframe|object|embed|style|svg|math|form|input|button|link|meta)\b|\bon[a-z]+\s*=|javascript\s*:/i;

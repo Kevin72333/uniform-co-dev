@@ -17,26 +17,41 @@ describe("System Guide access contract", () => {
 
   it("loads only the three allowlisted Markdown sources", () => {
     const loader = source("../server/system-guide.ts");
-    expect(loader).toContain('fileName: "user-guide.md"');
-    expect(loader).toContain('fileName: "admin-guide.md"');
-    expect(loader).toContain('fileName: "agent-guide.md"');
+    const domain = source("system-guide.ts");
+    expect(domain).toContain('fileName: "user-guide.md"');
+    expect(domain).toContain('fileName: "admin-guide.md"');
+    expect(domain).toContain('fileName: "agent-guide.md"');
+    expect(loader).toContain("systemGuideDocumentDefinitions.map");
     expect(loader).not.toMatch(/fileName\s*:\s*(request|params|searchParams)/);
   });
 
   it("renders typed blocks and never injects Markdown as HTML", () => {
     const page = source("../app/system-guide/SystemGuidePageClient.tsx");
     expect(page).toContain("function GuideBlock");
-    expect(page).toContain("guideState?.userId === user.id");
     expect(page).not.toContain("dangerouslySetInnerHTML");
   });
 
-  it("shows navigation only after the protected access probe succeeds", () => {
+  it("keeps the original workspace shell around the System Guide route", () => {
+    const routePage = source("../app/system-guide/page.tsx");
     const shell = source("../app/WorkspaceShell.tsx");
+    expect(routePage).toContain("<WorkspaceShell initialSystemGuide />");
+    expect(shell).toContain('className="app-sidebar"');
+    expect(shell).toContain("<SystemGuidePageClient");
+  });
+
+  it("does not wait for a second client request before showing document navigation", () => {
+    const page = source("../app/system-guide/SystemGuidePageClient.tsx");
+    expect(page).toContain("systemGuideDocumentDefinitions.map");
+    expect(page).not.toContain('fetch("/api/system-guide"');
+    expect(page).not.toContain("useAuthSession");
+  });
+
+  it("uses the self-readable role table and cached prefetch instead of a delayed HEAD probe", () => {
     const accessHook = source("../app/use-system-guide-access.ts");
-    expect(shell).toContain("systemGuideAvailable ?");
-    expect(shell).toContain("useSystemGuideAccess(client, user)");
-    expect(accessHook).toContain('method: "HEAD"');
-    expect(accessHook).toContain("access?.userId === user.id");
+    expect(accessHook).toContain('.from("user_roles")');
+    expect(accessHook).toContain("sessionStorage");
+    expect(accessHook).toContain('fetch("/api/system-guide"');
+    expect(accessHook).not.toContain('method: "HEAD"');
   });
 
   it("includes the Markdown files in the standalone route bundle", () => {

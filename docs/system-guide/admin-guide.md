@@ -58,6 +58,10 @@ CEO
 DEMAND_COORDINATOR
 ```
 
+### System Guide 權限
+
+「系統說明」入口暫時只提供 `SYSTEM_ADMIN`。前台使用登入者可由 RLS 讀取的 `user_roles` 快速判斷並在目前分頁快取顯示狀態；真正的文件內容仍由 `/api/system-guide` 重新驗證 bearer session、有效業務帳號與 `SYSTEM_ADMIN` 角色。移除角色後，即使舊分頁短暫保留入口，受保護 API 仍會拒絕內容並清除該分頁的顯示快取。
+
 ## 4. Migration 管理
 
 Migration 正式來源為 `supabase/migrations/`，目前版本到 `0079_employee_master_management.sql`。Migration 須按版本順序套用，並在受保護環境記錄 `supabase_migrations.schema_migrations`。

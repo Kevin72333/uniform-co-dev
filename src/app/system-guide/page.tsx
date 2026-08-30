@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import SystemGuidePageClient from "./SystemGuidePageClient";
+import WorkspaceShell from "../WorkspaceShell";
 
 export const metadata: Metadata = {
   title: "System Guide｜制服管理系統",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function SystemGuidePage() {
-  return <SystemGuidePageClient />;
+  return <WorkspaceShell initialSystemGuide />;
 }

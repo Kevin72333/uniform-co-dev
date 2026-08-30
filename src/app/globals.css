@@ -1877,7 +1877,8 @@ html[data-appearance="sh"] .increase-row input:focus {
 .system-guide-gate-card > p:not(.eyebrow) { color: var(--muted); line-height: 1.7; }
 .system-guide-back-link { display: inline-flex; align-items: center; justify-content: center; margin-top: 18px; text-decoration: none; }
 .system-guide-hero { display: flex; gap: 24px; align-items: flex-end; justify-content: space-between; max-width: 1480px; margin: 0 auto 24px; padding: 26px 28px; border: 1px solid var(--line); border-radius: 24px; background: color-mix(in srgb, var(--card) 94%, transparent); box-shadow: 0 16px 50px rgba(26, 46, 67, .08); }
-.system-guide-hero h1 { margin: 7px 0 0; font-size: clamp(30px, 4vw, 52px); letter-spacing: -.055em; line-height: 1.02; }
+.system-guide-hero h1,
+.system-guide-hero h2 { margin: 7px 0 0; font-size: clamp(30px, 4vw, 52px); letter-spacing: -.055em; line-height: 1.02; }
 .system-guide-hero > div > p:last-child { max-width: 720px; margin-top: 10px; color: var(--muted); line-height: 1.65; }
 .system-guide-hero-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-end; justify-content: flex-end; }
 .system-guide-hero-actions .secondary-button { margin-top: 0; white-space: nowrap; }
@@ -1923,9 +1924,19 @@ html[data-appearance="sh"] .increase-row input:focus {
 .system-guide-table-wrap th { color: var(--ink); background: color-mix(in srgb, var(--accent) 8%, var(--card)); font-weight: 850; }
 .system-guide-table-wrap td { color: color-mix(in srgb, var(--ink) 82%, var(--muted)); }
 .system-guide-table-wrap tr:last-child td { border-bottom: 0; }
+.system-guide-page-embedded { min-height: 0; padding: 0; background: transparent; }
+.system-guide-page-embedded .system-guide-hero,
+.system-guide-page-embedded .system-guide-shell { max-width: none; }
+.system-guide-page-embedded .system-guide-sidebar nav { margin-top: 0; }
+.system-guide-loading { display: grid; min-height: 260px; place-items: center; align-content: center; gap: 12px; text-align: center; }
+.system-guide-loading p { color: var(--muted); }
+.system-guide-embedded-gate { min-height: 360px; padding: clamp(28px, 6vw, 64px); }
+.system-guide-embedded-gate h2 { margin: 8px 0 12px; font-size: clamp(26px, 4vw, 42px); }
+.system-guide-embedded-gate > p:not(.eyebrow) { max-width: 680px; color: var(--muted); line-height: 1.75; }
 
 @media (max-width: 900px) {
   .system-guide-page { padding: 16px; }
+  .system-guide-page-embedded { padding: 0; }
   .system-guide-hero { display: grid; padding: 22px; }
   .system-guide-hero-actions { justify-content: flex-start; }
   .system-guide-shell { grid-template-columns: 1fr; }

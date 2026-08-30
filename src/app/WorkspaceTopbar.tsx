@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import {
   searchWorkspaceModules,
-  type WorkspaceDefinition,
   type WorkspaceId,
   type WorkspaceSearchResult,
 } from "./workspaces/workspace-config";
@@ -20,7 +19,7 @@ type NotificationItem = {
 };
 
 type Props = {
-  activeDefinition: WorkspaceDefinition;
+  activeDefinition: { label: string; eyebrow: string; description: string };
   user: User;
   appearanceTheme: AppearanceTheme;
   onAppearanceChange: (theme: AppearanceTheme) => void;

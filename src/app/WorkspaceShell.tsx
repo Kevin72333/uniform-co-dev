@@ -6,6 +6,7 @@ import AuthPanel from "./AuthPanel";
 import AuthSessionBoundary from "./AuthSessionBoundary";
 import RetainedPanelSet from "./RetainedPanelSet";
 import WorkspaceTopbar from "./WorkspaceTopbar";
+import SystemGuidePageClient from "./system-guide/SystemGuidePageClient";
 import { useAuthSession } from "./use-auth-session";
 import { useSystemGuideAccess } from "./use-system-guide-access";
 import AccountWorkspace from "./workspaces/AccountWorkspace";
@@ -47,6 +48,12 @@ function SystemGuideIcon() {
   return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z" /></svg>;
 }
 
+const systemGuideDefinition = {
+  label: "系統說明",
+  eyebrow: "SYSTEM GUIDE / ADMIN ONLY",
+  description: "在原作業台中查閱使用者操作、管理設定與 AI Agent 交接說明。",
+};
+
 function workspaceFromUrl(): WorkspaceId {
   if (typeof window === "undefined") {
     return "overview";
@@ -80,16 +87,18 @@ function WorkspaceStage({ children, appearanceTheme }: { children: ReactNode; ap
   return <div ref={motionScope} className="app-shell">{children}</div>;
 }
 
-export default function WorkspaceShell() {
+export default function WorkspaceShell({ initialSystemGuide = false }: { initialSystemGuide?: boolean }) {
   const router = useRouter();
   const { client, user, loading } = useAuthSession();
-  const systemGuideAvailable = useSystemGuideAccess(client, user);
+  const systemGuide = useSystemGuideAccess(client, user);
   const { theme: appearanceTheme, setTheme: setAppearanceTheme } = useAppearanceTheme();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
   const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
   const activeDefinition = workspaceDefinitions.find((workspace) => workspace.id === activeWorkspace) ?? workspaceDefinitions[0];
+  const activeHeaderDefinition = initialSystemGuide ? systemGuideDefinition : activeDefinition;
   const activeModule = activeModuleByWorkspace[activeWorkspace] ?? activeDefinition.modules[0].anchor;
   const accountLabel = user ? accountLabelFromUser(user) : "已登入帳號";
+  const guideNavigationVisible = systemGuide.allowed || (initialSystemGuide && systemGuide.checking);
 
   useEffect(() => {
     const syncWorkspace = () => setActiveWorkspace(workspaceFromUrl());
@@ -108,6 +117,10 @@ export default function WorkspaceShell() {
       ? anchor
       : definition.modules[0].anchor;
     const workspaceChanged = activeWorkspace !== id;
+    if (initialSystemGuide) {
+      router.push(`/#${id}`);
+      return;
+    }
     setActiveWorkspace(id);
     setActiveModuleByWorkspace((current) => ({ ...current, [id]: nextModule }));
     if (window.location.hash !== `#${id}`) {
@@ -156,7 +169,7 @@ export default function WorkspaceShell() {
             <button
               key={workspace.id}
               id={`workspace-tab-${workspace.id}`}
-              className={activeWorkspace === workspace.id ? "active" : ""}
+              className={!initialSystemGuide && activeWorkspace === workspace.id ? "active" : ""}
               type="button"
               role="tab"
               aria-selected={activeWorkspace === workspace.id}
@@ -167,7 +180,7 @@ export default function WorkspaceShell() {
               <span>{workspace.label}</span>
             </button>
           ))}
-          {systemGuideAvailable ? <button type="button" aria-label="開啟系統說明" onClick={() => router.push("/system-guide")}><span className="app-nav-icon"><SystemGuideIcon /></span><span>系統說明</span></button> : null}
+          {guideNavigationVisible ? <button className={initialSystemGuide ? "active" : ""} type="button" aria-label="開啟系統說明" aria-current={initialSystemGuide ? "page" : undefined} onClick={() => router.push("/system-guide")}><span className="app-nav-icon"><SystemGuideIcon /></span><span>系統說明</span></button> : null}
         </nav>
 
         <div className="app-sidebar-bottom">
@@ -183,12 +196,12 @@ export default function WorkspaceShell() {
 
       <div className="app-main">
         <WorkspaceTopbar
-          activeDefinition={activeDefinition}
+          activeDefinition={activeHeaderDefinition}
           user={user}
           appearanceTheme={appearanceTheme}
           onAppearanceChange={(theme: AppearanceTheme) => setAppearanceTheme(theme)}
           onNavigate={selectWorkspace}
-          onOpenSystemGuide={systemGuideAvailable ? () => router.push("/system-guide") : undefined}
+          onOpenSystemGuide={systemGuide.allowed && !initialSystemGuide ? () => router.push("/system-guide") : undefined}
           onSignOut={async () => {
             const { error } = await client.auth.signOut();
             if (error) throw error;
@@ -199,7 +212,7 @@ export default function WorkspaceShell() {
           <label htmlFor="workspace-mobile-select">目前工作區</label>
           <select
             id="workspace-mobile-select"
-            value={activeWorkspace}
+            value={initialSystemGuide ? "system-guide" : activeWorkspace}
             onChange={(event) => {
               if (isWorkspaceId(event.target.value)) {
                 selectWorkspace(event.target.value);
@@ -207,10 +220,11 @@ export default function WorkspaceShell() {
             }}
           >
             {workspaceDefinitions.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.label}</option>)}
+            {guideNavigationVisible ? <option value="system-guide">系統說明</option> : null}
           </select>
         </div>
 
-        <nav className="workspace-module-nav" aria-label={`${activeDefinition.label}模組導航`}>
+        {!initialSystemGuide ? <nav className="workspace-module-nav" aria-label={`${activeDefinition.label}模組導航`}>
           <div className="workspace-module-nav-heading">
             <p className="eyebrow">MODULES</p>
             <span>本工作區功能</span>
@@ -231,10 +245,17 @@ export default function WorkspaceShell() {
               </button>
             ))}
           </div>
-        </nav>
+        </nav> : null}
 
         <AuthSessionBoundary>
-          <RetainedPanelSet
+          {initialSystemGuide ? (
+            <SystemGuidePageClient
+              documents={systemGuide.documents}
+              loading={systemGuide.checking || systemGuide.documentsLoading}
+              message={systemGuide.message}
+              forbidden={!systemGuide.checking && !systemGuide.allowed}
+            />
+          ) : <RetainedPanelSet
             idPrefix="workspace"
             activePanelId={activeWorkspace}
             panelClassName="workspace-page"
@@ -256,7 +277,7 @@ export default function WorkspaceShell() {
                 </>,
               };
             })}
-          />
+          />}
         </AuthSessionBoundary>
       </div>
     </WorkspaceStage>

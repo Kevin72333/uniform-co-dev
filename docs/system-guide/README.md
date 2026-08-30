@@ -18,7 +18,7 @@
 2. `admin-guide.md`：帳號、角色、環境、Migration、主檔、期初、Worker、備份與上線檢查。
 3. `agent-guide.md`：架構、模組邊界、資料流、命令、測試、部署、風險與接手順序。
 
-前台 System Guide 直接讀取上述三份 Markdown，先在伺服器端以 Supabase bearer session 驗證 `SYSTEM_ADMIN`，再轉換成受限文件區塊。頁面不使用 `dangerouslySetInnerHTML`，原始 HTML 或 JavaScript 不會被當成可執行內容。
+前台 System Guide 直接讀取上述三份 Markdown，並嵌入原本的 `WorkspaceShell` 右側內容區；原作業台左側選單保持可用。文件按鈕由固定 allowlist metadata 立即呈現，內容則由受保護 API 在伺服器端以 Supabase bearer session 驗證 `SYSTEM_ADMIN` 後載入。頁面不使用 `dangerouslySetInnerHTML`，原始 HTML 或 JavaScript 不會被當成可執行內容。
 
 ## 掃描範圍與證據
 
@@ -26,9 +26,9 @@
 
 ## 產出驗證
 
-- `npm test`：64 個 test files、261/261 tests 通過。
+- `npm test`：64 個 test files、263/263 tests 通過。
 - `npm run lint`、`npm run typecheck`、`npm run build`：通過。
-- Next.js build trace 已包含三份前台 Markdown；`/api/system-guide` 為動態路由，`/system-guide` 頁面已產生。
+- Next.js build trace 已包含三份前台 Markdown；`/api/system-guide` 為動態路由，`/system-guide` 與首頁共用正式工作區外殼。
 - Prototype JavaScript syntax smoke 與 `git diff --check`：通過。
 - 本功能沿用既有角色與 Supabase session，不需要新增或執行 Supabase SQL migration。
 
