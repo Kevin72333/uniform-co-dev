@@ -9,9 +9,9 @@
 ```text
 src/app/page.tsx
 └─ WorkspaceShell                 導航、hash 工作區狀態、共用頁面外殼
-   ├─ workspaces/OverviewWorkspace   帳號、主檔、耐久匯入
+   ├─ workspaces/OverviewWorkspace   組織主檔、商品管理、耐久匯入
    ├─ workspaces/HrWorkspace          人資需求、補庫、退回、員工匯入、更正
-   ├─ workspaces/WarehouseWorkspace   庫存、發貨、盤點、倉庫更正
+   ├─ workspaces/WarehouseWorkspace   庫存管理、發貨、盤點、倉庫更正
    ├─ workspaces/ProcurementWorkspace 採購決策、差異、入庫、更正
    ├─ workspaces/SeasonalWorkspace    換季活動、需求登記、CEO 審核
    └─ workspaces/ReportsWorkspace     報表、PDF artifact、ERP 匯出
@@ -19,16 +19,22 @@ src/app/page.tsx
 
 `WorkspaceShell` 的介面只有工作區選擇與呈現；它不直接讀取業務 table，也不實作任何 RPC。每個 workspace module 是一個可替換的版面組合，內部面板仍各自擁有 Supabase 查詢、表單狀態、錯誤處理與操作流程。
 
-## 六個工作區契約
+## 七個工作區契約
 
 工作區 ID 集中在 `src/app/workspaces/workspace-config.ts`。新增或調整工作區時，需同步：
 
 1. config 的 `id`、中文名稱、說明與導航順序。
 2. `WorkspaceShell.tsx` 的內容映射與 hash deep link。
 3. 對應的 workspace module 及其面板分組。
-4. prototype 的六工作區 smoke 與正式網站的 DOM smoke。
+4. 正式網站的 workspace／module DOM smoke；prototype 仍維持自己的六工作區契約。
 
-目前工作區名稱固定為：`總覽`、`人資需求`、`倉庫作業`、`採購與入庫`、`換季活動`、`報表`。
+目前正式工作區名稱固定為：`總覽`、`帳號管理`、`人資需求`、`倉庫作業`、`採購與入庫`、`換季活動`、`報表`。
+
+## 商品與庫存模組邊界
+
+- `總覽 > 商品管理` 是 `ProductManagementPanel` 的組合入口。`ProductCatalogPanel` 只讀目前品號與可見供應商 MOQ，主檔操作只提供制服品號、供應商及供應商品號／MOQ 三類資料；`MasterDataPanel` 透過 `allowedEntityTypes` 重用同一套預覽、匯入、匯出與 RPC 介面，組織機構／部門則留在 `組織主檔`。
+- `倉庫作業 > 庫存管理` 是 `InventoryManagementPanel` 的組合入口。`InventoryAvailabilityPanel` 只讀 `v_item_availability` 顯示兩倉帳面量、品號合計預留與可申請量；`InventoryCalculator` 保留為不寫入的規則試算。盤點、發貨與更正仍各自留在既有面板，不複製業務狀態。
+- 商品與庫存模組不建立第二份數量或商品資料。商品匯入走既有主檔 RPC；庫存數字仍由 `inventory_balances`／不可變流水及 security-invoker view 提供，瀏覽器不直接寫入餘額。
 
 ## 狀態與資料邊界
 
@@ -61,4 +67,4 @@ npm run build
 git diff --check
 ```
 
-瀏覽器再確認六個導航項目都能切換、每次只有一個可見 `tabpanel`、`#overview`／`#hr` 等 hash 可直接開啟，以及手機寬度會出現工作區下拉選單。
+瀏覽器再確認七個導航項目都能切換、商品管理與庫存管理頁籤可開啟、每次只有一個可見 `tabpanel`、`#overview`／`#hr` 等 hash 可直接開啟，以及手機寬度會出現工作區下拉選單。

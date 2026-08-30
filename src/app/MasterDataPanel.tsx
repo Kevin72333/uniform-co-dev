@@ -13,8 +13,18 @@ const entityOptions = [
   ["SUPPLIER_ITEMS", "供應商品號 MOQ"],
 ] as const;
 
-export default function MasterDataPanel() {
-  const [entityType, setEntityType] = useState<(typeof entityOptions)[number][0]>("INSTITUTIONS");
+export type MasterEntityType = (typeof entityOptions)[number][0];
+
+type Props = {
+  allowedEntityTypes?: readonly MasterEntityType[];
+};
+
+export default function MasterDataPanel({ allowedEntityTypes }: Props) {
+  const visibleEntityOptions = allowedEntityTypes
+    ? entityOptions.filter(([value]) => allowedEntityTypes.includes(value))
+    : entityOptions;
+  const defaultEntityType = visibleEntityOptions[0]?.[0] ?? "INSTITUTIONS";
+  const [entityType, setEntityType] = useState<MasterEntityType>(defaultEntityType);
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<unknown[]>([]);
   const [sampleMode, setSampleMode] = useState(false);
@@ -30,7 +40,7 @@ export default function MasterDataPanel() {
     setMessage("尚未載入檔案");
   }
 
-  function selectEntity(nextEntityType: typeof entityType) {
+  function selectEntity(nextEntityType: MasterEntityType) {
     setEntityType(nextEntityType);
     resetPreview();
   }
@@ -149,8 +159,8 @@ export default function MasterDataPanel() {
       <div className="form-grid master-tools">
         <label className="field">
           <span>主檔類型</span>
-          <select value={entityType} onChange={(event) => selectEntity(event.target.value as typeof entityType)} disabled={busy}>
-            {entityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          <select value={entityType} onChange={(event) => selectEntity(event.target.value as MasterEntityType)} disabled={busy}>
+            {visibleEntityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
         <label className="file-picker">

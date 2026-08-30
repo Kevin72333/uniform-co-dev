@@ -258,7 +258,9 @@ export default function OverviewDashboard({ onNavigate }: Props) {
           <div className="panel-heading"><div><h2>快速入口</h2><p>直接進入最常用的正式流程</p></div></div>
           <div className="overview-quick-actions">
             <QuickAction label="建立人資需求" description="新增員工制服申請與預留" mark="人" onClick={() => onNavigate("hr", "hr-request-title")} />
+            <QuickAction label="查看庫存" description="檢視兩倉帳面量與可申請量" mark="量" onClick={() => onNavigate("warehouse", "warehouse-inventory-title")} />
             <QuickAction label="開始倉庫盤點" description="建立盤點批次並鎖定帳面量" mark="倉" onClick={() => onNavigate("warehouse", "warehouse-stocktake-title")} />
+            <QuickAction label="管理商品" description="維護品號、供應商與 MOQ" mark="品" onClick={() => onNavigate("overview", "overview-products-title")} />
             <QuickAction label="匯入主檔" description="上傳資料並確認正式差異" mark="匯" onClick={() => onNavigate("overview", "overview-import-title")} />
             <QuickAction label="管理帳號" description="角色、狀態與窗口範圍" mark="權" onClick={() => onNavigate("accounts", "accounts-admin-title")} />
           </div>
