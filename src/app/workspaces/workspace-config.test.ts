@@ -17,4 +17,10 @@ describe("workspace module index", () => {
     expect(warehouse?.modules[1]).toMatchObject({ anchor: "warehouse-control-title", label: "發貨作業" });
     expect(searchWorkspaceModules("庫存清單")[0]?.anchor).toBe("warehouse-inventory-title");
   });
+
+  it("exposes employee master management separately from HR corrections", () => {
+    const hr = workspaceDefinitions.find((workspace) => workspace.id === "hr");
+    expect(hr?.modules).toContainEqual(expect.objectContaining({ anchor: "hr-employee-title", label: "員工主檔管理" }));
+    expect(searchWorkspaceModules("離職")[0]?.anchor).toBe("hr-employee-title");
+  });
 });

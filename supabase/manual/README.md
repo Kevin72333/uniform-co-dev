@@ -23,3 +23,9 @@
 2. `manual/0078_organization_manager_read_inactive.sql`（機構／部門停用資料）。
 
 `0078` 只增加 HR 對停用機構與部門的 `SELECT` 權限；既有角色讀取啟用資料的 RLS 不變，新增、修改、停用仍只能經過 `apply_master_import`。
+
+員工主檔管理的單筆新增／修改／停用與稽核匯出，請在上述 migration 都已套用、且 `operation_commands`、`audit_events`、`private.append_audit_event` 已存在後執行：
+
+3. `migrations/0079_employee_master_management.sql`
+
+`0079` 新增 HR-only 的 `save_employee_master` 與 `record_employee_master_export`。新增時若工號已存在會拒絕，修改時必須帶既有員工 UUID 且不可變更工號；停用只更新 `employment_status = 'INACTIVE'`，不會 DELETE 員工或交易歷史。執行前不需要刪除既有資料，成功後重新整理網站即可使用單筆保存與稽核匯出。

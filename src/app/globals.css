@@ -52,9 +52,10 @@ h2 { font-size: 24px; letter-spacing: -.03em; margin-bottom: 0; }
 .muted, .field > span, .metric span, dt { color: var(--muted); font-size: 13px; }
 .form-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field { display: grid; gap: 7px; }
-.field input { background: #fbfcfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); font: inherit; padding: 13px 14px; width: 100%; }
+.field input, .field textarea { background: #fbfcfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); font: inherit; padding: 13px 14px; width: 100%; }
+.field textarea { min-height: 112px; resize: vertical; }
 .field select, .increase-row input { background: #fbfcfa; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); font: inherit; min-width: 0; padding: 13px 14px; width: 100%; }
-.field input:focus { border-color: var(--accent); outline: 3px solid rgba(216, 116, 74, .16); }
+.field input:focus, .field textarea:focus { border-color: var(--accent); outline: 3px solid rgba(216, 116, 74, .16); }
 .field select:focus, .increase-row input:focus { border-color: var(--accent); outline: 3px solid rgba(216, 116, 74, .16); }
 .reason-field { margin-top: 18px; }
 .metric-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -312,6 +313,10 @@ body {
 .table-sort-button { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: inline-flex; font: inherit; font-weight: 800; gap: 5px; padding: 0; }
 .product-catalog-table,
 .management-catalog-table { max-height: 560px; }
+.employee-catalog-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.employee-catalog-actions button { margin: 0; }
+.employee-catalog-filters { align-items: end; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) 190px 240px; margin-top: 18px; }
+.employee-editor-note { grid-column: 1 / -1; }
 .product-supplier-cell { max-width: 360px; white-space: normal; }
 .product-table-actions,
 .management-table-actions { align-items: center; display: flex; gap: 12px; }
@@ -374,6 +379,8 @@ body {
   .module-workbench-actions { justify-content: flex-start; }
   .product-catalog-metrics,
   .management-catalog-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .employee-catalog-filters { grid-template-columns: minmax(0, 1fr) 180px; }
+  .employee-catalog-filters .field:last-child { grid-column: 1 / -1; }
   .inventory-toolbar { grid-template-columns: 1fr 1fr; }
   .inventory-toolbar-action { grid-column: 1 / -1; }
   .catalog-toolbar { grid-template-columns: 1fr auto; }
@@ -389,6 +396,8 @@ body {
   .account-directory-filters { grid-template-columns: 1fr; }
   .product-catalog-filters,
   .management-catalog-filters { grid-template-columns: 1fr; }
+  .employee-catalog-filters { grid-template-columns: 1fr; }
+  .employee-catalog-filters .field:last-child { grid-column: auto; }
   .product-management-header,
   .module-workbench-header,
   .product-catalog-panel { padding: 20px; }
@@ -590,7 +599,7 @@ body {
 .primary-button { background: var(--accent); box-shadow: 4px 4px 0 rgba(79, 44, 32, .14); }
 .secondary-button { color: var(--accent-dark); background: rgba(249, 248, 244, .9); border-color: #d2ccc0; }
 .secondary-button:hover { background: #f7eee8; }
-.field input, .field select, .increase-row input {
+.field input, .field textarea, .field select, .increase-row input {
   min-height: 40px;
   padding: 10px 12px;
   border-color: #d2ccc0;
@@ -598,7 +607,7 @@ body {
   background: rgba(249, 248, 244, .9);
   font-size: 13px;
 }
-.field input:focus, .field select:focus, .increase-row input:focus { border-color: var(--accent); outline-color: rgba(198, 83, 55, .2); }
+.field input:focus, .field textarea:focus, .field select:focus, .increase-row input:focus { border-color: var(--accent); outline-color: rgba(198, 83, 55, .2); }
 .file-picker { border-color: var(--accent); color: var(--accent-dark); background: #f7eee8; border-radius: 9px; }
 .metric { border-radius: 9px; background: #efede7; }
 .success-note { color: var(--green); background: #dcebe2; border-radius: 9px; }
@@ -1013,8 +1022,8 @@ body {
 .primary-button:active, .secondary-button:active { transform: scale(.98); }
 .secondary-button { color: var(--accent-dark); background: rgba(255, 255, 255, .78); border-color: rgba(60, 60, 67, .16); }
 .secondary-button:hover { color: var(--accent-dark); background: rgba(0, 113, 227, .07); border-color: rgba(0, 113, 227, .28); }
-.field input, .field select, .increase-row input { border-color: rgba(60, 60, 67, .16); background: rgba(255, 255, 255, .8); }
-.field input:focus, .field select:focus, .increase-row input:focus { border-color: rgba(0, 113, 227, .6); outline-color: rgba(0, 113, 227, .15); }
+.field input, .field textarea, .field select, .increase-row input { border-color: rgba(60, 60, 67, .16); background: rgba(255, 255, 255, .8); }
+.field input:focus, .field textarea:focus, .field select:focus, .increase-row input:focus { border-color: rgba(0, 113, 227, .6); outline-color: rgba(0, 113, 227, .15); }
 .table-scroll, .overview-table-scroll { border-color: rgba(60, 60, 67, .12); }
 .table-scroll th, .overview-table th { color: #6e6e73; background: #f5f5f7; }
 .success-note { color: var(--green); background: rgba(36, 138, 61, .1); }
@@ -1121,8 +1130,8 @@ html[data-appearance="previous"] .primary-button { background: var(--accent); bo
 html[data-appearance="previous"] .primary-button:hover { background: var(--accent-dark); }
 html[data-appearance="previous"] .secondary-button { color: var(--green); background: #f0f5ef; border-color: var(--line); }
 html[data-appearance="previous"] .secondary-button:hover { color: var(--green); background: #e7f0e7; border-color: var(--line); }
-html[data-appearance="previous"] .field input, html[data-appearance="previous"] .field select, html[data-appearance="previous"] .increase-row input { border-color: var(--line); background: #fbfcfa; }
-html[data-appearance="previous"] .field input:focus, html[data-appearance="previous"] .field select:focus, html[data-appearance="previous"] .increase-row input:focus { border-color: var(--accent); outline-color: rgba(198, 83, 74, .16); }
+html[data-appearance="previous"] .field input, html[data-appearance="previous"] .field textarea, html[data-appearance="previous"] .field select, html[data-appearance="previous"] .increase-row input { border-color: var(--line); background: #fbfcfa; }
+html[data-appearance="previous"] .field input:focus, html[data-appearance="previous"] .field textarea:focus, html[data-appearance="previous"] .field select:focus, html[data-appearance="previous"] .increase-row input:focus { border-color: var(--accent); outline-color: rgba(198, 83, 74, .16); }
 html[data-appearance="previous"] .table-scroll, html[data-appearance="previous"] .overview-table-scroll { border-color: var(--line); }
 html[data-appearance="previous"] .table-scroll th, html[data-appearance="previous"] .overview-table th { color: #787166; background: #eeece5; }
 html[data-appearance="previous"] .success-note { color: var(--green); background: #eef7ef; }
@@ -1253,8 +1262,8 @@ html[data-appearance="ga"] .primary-button { color: #0b100d; background: var(--a
 html[data-appearance="ga"] .primary-button:hover { color: #071006; background: #a7ec25; }
 html[data-appearance="ga"] .secondary-button { color: var(--accent-dark); background: rgba(136, 206, 2, .08); border-color: rgba(136, 206, 2, .28); }
 html[data-appearance="ga"] .secondary-button:hover { color: #0b100d; background: var(--accent); border-color: var(--accent); }
-html[data-appearance="ga"] .field input, html[data-appearance="ga"] .field select, html[data-appearance="ga"] .increase-row input { border-color: rgba(166, 221, 112, .18); color: var(--ink); background: rgba(8, 14, 10, .56); }
-html[data-appearance="ga"] .field input:focus, html[data-appearance="ga"] .field select:focus, html[data-appearance="ga"] .increase-row input:focus { border-color: var(--accent); outline-color: rgba(136, 206, 2, .2); }
+html[data-appearance="ga"] .field input, html[data-appearance="ga"] .field textarea, html[data-appearance="ga"] .field select, html[data-appearance="ga"] .increase-row input { border-color: rgba(166, 221, 112, .18); color: var(--ink); background: rgba(8, 14, 10, .56); }
+html[data-appearance="ga"] .field input:focus, html[data-appearance="ga"] .field textarea:focus, html[data-appearance="ga"] .field select:focus, html[data-appearance="ga"] .increase-row input:focus { border-color: var(--accent); outline-color: rgba(136, 206, 2, .2); }
 html[data-appearance="ga"] .table-scroll, html[data-appearance="ga"] .overview-table-scroll { border-color: rgba(166, 221, 112, .18); }
 html[data-appearance="ga"] .table-scroll th, html[data-appearance="ga"] .overview-table th { color: #b6d5aa; background: rgba(136, 206, 2, .1); }
 html[data-appearance="ga"] .table-scroll td, html[data-appearance="ga"] .overview-table td { border-color: rgba(166, 221, 112, .12); }
@@ -1367,8 +1376,8 @@ html[data-appearance="mb"] .primary-button { color: #fff; background: var(--acce
 html[data-appearance="mb"] .primary-button:hover { background: var(--accent-dark); }
 html[data-appearance="mb"] .secondary-button { color: var(--accent-dark); background: transparent; border-color: var(--line); }
 html[data-appearance="mb"] .secondary-button:hover { color: var(--accent-dark); background: rgba(20, 125, 120, .07); border-color: rgba(20, 125, 120, .34); }
-html[data-appearance="mb"] .field input, html[data-appearance="mb"] .field select, html[data-appearance="mb"] .increase-row input { border-color: var(--line); background: var(--card); }
-html[data-appearance="mb"] .field input:focus, html[data-appearance="mb"] .field select:focus, html[data-appearance="mb"] .increase-row input:focus { border-color: rgba(20, 125, 120, .62); outline-color: rgba(20, 125, 120, .12); }
+html[data-appearance="mb"] .field input, html[data-appearance="mb"] .field textarea, html[data-appearance="mb"] .field select, html[data-appearance="mb"] .increase-row input { border-color: var(--line); background: var(--card); }
+html[data-appearance="mb"] .field input:focus, html[data-appearance="mb"] .field textarea:focus, html[data-appearance="mb"] .field select:focus, html[data-appearance="mb"] .increase-row input:focus { border-color: rgba(20, 125, 120, .62); outline-color: rgba(20, 125, 120, .12); }
 html[data-appearance="mb"] .table-scroll, html[data-appearance="mb"] .overview-table-scroll { border-color: var(--line); }
 html[data-appearance="mb"] .table-scroll th, html[data-appearance="mb"] .overview-table th { color: var(--muted); background: #edf0ef; }
 html[data-appearance="mb"] .table-scroll td, html[data-appearance="mb"] .overview-table td { border-color: var(--line); }
@@ -1840,6 +1849,7 @@ html[data-appearance="sh"] .secondary-button:hover {
 }
 
 html[data-appearance="sh"] .field input,
+html[data-appearance="sh"] .field textarea,
 html[data-appearance="sh"] .field select,
 html[data-appearance="sh"] .increase-row input {
   border-color: var(--sh-input);
@@ -1848,6 +1858,7 @@ html[data-appearance="sh"] .increase-row input {
 }
 
 html[data-appearance="sh"] .field input:focus,
+html[data-appearance="sh"] .field textarea:focus,
 html[data-appearance="sh"] .field select:focus,
 html[data-appearance="sh"] .increase-row input:focus {
   border-color: var(--sh-ring);
