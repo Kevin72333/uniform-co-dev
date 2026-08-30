@@ -1,15 +1,25 @@
+"use client";
+
+import { useState } from "react";
 import MasterDataPanel, { type MasterEntityType } from "./MasterDataPanel";
-import ProductCatalogPanel from "./ProductCatalogPanel";
+import ProductCatalogPanel, { type ProductItemEditRequest } from "./ProductCatalogPanel";
 import ProductMasterEditorPanel from "./ProductMasterEditorPanel";
 import DurableImportPanel from "./DurableImportPanel";
 
 const productEntityTypes: readonly MasterEntityType[] = ["UNIFORM_ITEMS", "SUPPLIERS", "SUPPLIER_ITEMS"];
 
 export default function ProductManagementPanel() {
+  const [itemEditRequest, setItemEditRequest] = useState<ProductItemEditRequest | null>(null);
+
+  function editItem(item: ProductItemEditRequest) {
+    setItemEditRequest(item);
+    window.setTimeout(() => document.getElementById("product-master-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
+
   return (
     <div className="workspace-sections">
-      <ProductCatalogPanel />
-      <ProductMasterEditorPanel />
+      <ProductCatalogPanel onEditItem={editItem} />
+      <ProductMasterEditorPanel key={itemEditRequest?.item_code ?? "new-product-editor"} itemEditRequest={itemEditRequest} />
       <div className="workspace-panel-grid workspace-panel-grid--balanced">
         <MasterDataPanel allowedEntityTypes={productEntityTypes} />
         <DurableImportPanel

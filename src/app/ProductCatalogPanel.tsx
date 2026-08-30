@@ -19,6 +19,8 @@ type ItemSource = Omit<ProductRow, "supplierSummary">;
 type SupplierSource = { id: string; supplier_code: string; name: string };
 type SupplierItemSource = { item_id: string; supplier_id: string; minimum_order_quantity: number | null; supplier_item_code: string | null };
 
+export type ProductItemEditRequest = ItemSource;
+
 function textValue(value: unknown): string {
   return value === null || value === undefined ? "" : String(value);
 }
@@ -41,7 +43,9 @@ function buildProductRows(items: ItemSource[], suppliers: SupplierSource[], rela
   }));
 }
 
-export default function ProductCatalogPanel() {
+type Props = { onEditItem?: (item: ProductItemEditRequest) => void };
+
+export default function ProductCatalogPanel({ onEditItem }: Props) {
   const client = getSupabaseBrowserClient();
   const [rows, setRows] = useState<ProductRow[]>([]);
   const [query, setQuery] = useState("");
@@ -107,7 +111,7 @@ export default function ProductCatalogPanel() {
       {filteredRows.length > 0 ? (
         <div className="table-scroll">
           <table>
-            <thead><tr><th>品號</th><th>品名／規格</th><th>分類／季別</th><th>單位</th><th>供應商／MOQ</th><th>狀態</th></tr></thead>
+            <thead><tr><th>品號</th><th>品名／規格</th><th>分類／季別</th><th>單位</th><th>供應商／MOQ</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>{filteredRows.map((row) => <tr key={row.id}>
               <td><strong>{row.item_code || "—"}</strong></td>
               <td>{row.item_name || "—"}{row.size ? `／${row.size}` : ""}</td>
@@ -115,6 +119,7 @@ export default function ProductCatalogPanel() {
               <td>{row.unit || "—"}</td>
               <td>{row.supplierSummary.length > 0 ? row.supplierSummary.join("；") : "尚未建立供應關係"}</td>
               <td><span className="status-pill success">{row.is_active ? "啟用" : "停用"}</span></td>
+              <td>{onEditItem ? <button className="secondary-button" type="button" onClick={() => onEditItem(row)}>修改</button> : null}</td>
             </tr>)}</tbody>
           </table>
         </div>

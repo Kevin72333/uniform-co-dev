@@ -10,6 +10,7 @@ import {
   type ProductEntityType,
 } from "@/src/domain/product-management";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
+import type { ProductItemEditRequest } from "./ProductCatalogPanel";
 
 type ItemSource = {
   id: string;
@@ -90,13 +91,17 @@ function formForSupplierItem(relation: SupplierItemSource): ProductEditorForm {
   };
 }
 
-export default function ProductMasterEditorPanel() {
+type Props = { itemEditRequest?: ProductItemEditRequest | null };
+
+export default function ProductMasterEditorPanel({ itemEditRequest }: Props) {
   const client = getSupabaseBrowserClient();
   const [entityType, setEntityType] = useState<ProductEntityType>("UNIFORM_ITEMS");
-  const [form, setForm] = useState<ProductEditorForm>(emptyProductEditorForm);
-  const [editingKey, setEditingKey] = useState("");
+  const [form, setForm] = useState<ProductEditorForm>(() => itemEditRequest ? formForItem(itemEditRequest) : emptyProductEditorForm);
+  const [editingKey, setEditingKey] = useState(() => itemEditRequest?.item_code ?? "");
   const [sources, setSources] = useState<Sources>(emptySources);
-  const [message, setMessage] = useState(() => client ? "正在讀取可編輯主檔…" : "預覽模式：設定 Supabase env 並登入後，才能保存商品主檔");
+  const [message, setMessage] = useState(() => itemEditRequest
+    ? `已載入 ${itemEditRequest.item_code}；現在可以修改品名、單位、規格或啟用狀態`
+    : client ? "正在讀取可編輯主檔…" : "預覽模式：設定 Supabase env 並登入後，才能保存商品主檔");
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -231,7 +236,7 @@ export default function ProductMasterEditorPanel() {
   const entityLabel = entityOptions.find(([value]) => value === entityType)?.[1] ?? "商品主檔";
 
   return (
-    <section className="panel" aria-label="商品主檔新增修改停用">
+    <section className="panel" id="product-master-editor" aria-label="商品主檔新增修改停用">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">PRODUCT CRUD</p>
