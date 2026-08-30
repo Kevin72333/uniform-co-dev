@@ -91,16 +91,33 @@ function formForSupplierItem(relation: SupplierItemSource): ProductEditorForm {
   };
 }
 
-type Props = { itemEditRequest?: ProductItemEditRequest | null };
+type Props = {
+  allowedEntityTypes?: readonly ProductEntityType[];
+  itemEditRequest?: ProductItemEditRequest | null;
+  intent?: "EDIT" | "DEACTIVATE";
+  onCancel?: () => void;
+  onSaved?: (stableKey: string, isActive: boolean) => void;
+};
 
-export default function ProductMasterEditorPanel({ itemEditRequest }: Props) {
+export default function ProductMasterEditorPanel({
+  allowedEntityTypes,
+  itemEditRequest,
+  intent = "EDIT",
+  onCancel,
+  onSaved,
+}: Props) {
   const client = getSupabaseBrowserClient();
-  const [entityType, setEntityType] = useState<ProductEntityType>("UNIFORM_ITEMS");
+  const visibleEntityOptions = entityOptions.filter(([value]) => !allowedEntityTypes || allowedEntityTypes.includes(value));
+  const defaultEntityType = itemEditRequest ? "UNIFORM_ITEMS" : visibleEntityOptions[0]?.[0] ?? "UNIFORM_ITEMS";
+  const catalogItemEditor = visibleEntityOptions.length === 1 && defaultEntityType === "UNIFORM_ITEMS";
+  const [entityType, setEntityType] = useState<ProductEntityType>(defaultEntityType);
   const [form, setForm] = useState<ProductEditorForm>(() => itemEditRequest ? formForItem(itemEditRequest) : emptyProductEditorForm);
   const [editingKey, setEditingKey] = useState(() => itemEditRequest?.item_code ?? "");
   const [sources, setSources] = useState<Sources>(emptySources);
-  const [message, setMessage] = useState(() => itemEditRequest
-    ? `已載入 ${itemEditRequest.item_code}；現在可以修改品名、單位、規格或啟用狀態`
+  const [message, setMessage] = useState(() => intent === "DEACTIVATE" && itemEditRequest
+    ? `即將停用 ${itemEditRequest.item_code}；請確認商品資料後按「確認停用」`
+    : itemEditRequest
+      ? `已載入 ${itemEditRequest.item_code}；現在可以修改品名、單位、規格或啟用狀態`
     : client ? "正在讀取可編輯主檔…" : "預覽模式：設定 Supabase env 並登入後，才能保存商品主檔");
   const [busy, setBusy] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
@@ -215,11 +232,13 @@ export default function ProductMasterEditorPanel({ itemEditRequest }: Props) {
     }
     setReloadToken((value) => value + 1);
     if (!formToSave.isActive) {
-      resetEditor();
       setMessage(`停用 ${stableKey} 完成；已留下主檔異動紀錄，既有交易仍可追溯`);
+      if (onSaved) onSaved(stableKey, false);
+      else resetEditor();
     } else {
       setEditingKey(stableKey);
       setMessage(`${editingKey ? "修改" : "新增"} ${stableKey} 完成；已留下主檔異動紀錄`);
+      onSaved?.(stableKey, true);
     }
     return true;
   }
@@ -233,29 +252,36 @@ export default function ProductMasterEditorPanel({ itemEditRequest }: Props) {
   }
 
   const keyLocked = Boolean(editingKey);
+  const confirmationOnly = intent === "DEACTIVATE";
   const entityLabel = entityOptions.find(([value]) => value === entityType)?.[1] ?? "商品主檔";
+  const editorTitle = catalogItemEditor
+    ? editingKey ? `編輯商品｜${editingKey}` : "新增商品"
+    : "供應商與 MOQ 維護";
 
   return (
     <section className="panel" id="product-master-editor" aria-label="商品主檔新增修改停用">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">PRODUCT CRUD</p>
-          <h2>新增／修改／停用商品主檔</h2>
+          <p className="eyebrow">{catalogItemEditor ? "PRODUCT FORM" : "SUPPLIER DIRECTORY"}</p>
+          <h2>{editorTitle}</h2>
+          <p className="auth-message">{catalogItemEditor
+            ? "商品編號建立後不可修改；其餘欄位可直接更新。"
+            : "先選擇供應商或供應商品號關係，再載入既有資料修改；也可直接新增一筆。"}</p>
         </div>
-        <span className={`status-pill ${editingKey ? "success" : ""}`}>{editingKey ? "修改模式" : "新增模式"}</span>
+        <span className={`status-pill ${intent === "DEACTIVATE" ? "danger" : editingKey ? "success" : ""}`}>{intent === "DEACTIVATE" ? "停用確認" : editingKey ? "修改模式" : "新增模式"}</span>
       </div>
-      <p className="auth-message">主檔唯一鍵不可在修改時改名；「刪除」會寫入 isActive=false，保留已發生的採購、發放與庫存歷史。所有保存仍由 Supabase 的 apply_master_import RPC 驗證角色、唯一鍵與冪等。</p>
-      <div className="form-grid product-editor-toolbar">
-        <label className="field"><span>資料類型</span><select value={entityType} onChange={(event) => selectEntity(event.target.value as ProductEntityType)} disabled={busy}><option value="UNIFORM_ITEMS">制服品號</option><option value="SUPPLIERS">供應商</option><option value="SUPPLIER_ITEMS">供應商品號／MOQ</option></select></label>
+      {intent === "DEACTIVATE" ? <div className="product-deactivate-warning"><strong>停用後不會刪除歷史資料</strong><span>此商品將不再提供新需求或新交易選用；既有庫存、採購與發放紀錄仍可追溯。</span></div> : null}
+      {!catalogItemEditor ? <div className="form-grid product-editor-toolbar">
+        <label className="field"><span>資料類型</span><select value={entityType} onChange={(event) => selectEntity(event.target.value as ProductEntityType)} disabled={busy}>{visibleEntityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="field"><span>載入既有資料（修改／停用）</span><select value={editingKey} onChange={(event) => selectExisting(event.target.value)} disabled={busy}><option value="">新增一筆 {entityLabel}</option>{existingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      </div>
+      </div> : null}
       {entityType === "UNIFORM_ITEMS" ? <div className="form-grid">
-        <label className="field"><span>品號</span><input value={form.itemCode} onChange={(event) => updateField("itemCode", event.target.value)} disabled={busy || keyLocked} maxLength={100} /></label>
-        <label className="field"><span>品名</span><input value={form.itemName} onChange={(event) => updateField("itemName", event.target.value)} disabled={busy} maxLength={255} /></label>
-        <label className="field"><span>單位</span><input value={form.unit} onChange={(event) => updateField("unit", event.target.value)} disabled={busy} maxLength={40} /></label>
-        <label className="field"><span>尺寸（選填）</span><input value={form.size} onChange={(event) => updateField("size", event.target.value)} disabled={busy} maxLength={80} /></label>
-        <label className="field"><span>分類（選填）</span><input value={form.category} onChange={(event) => updateField("category", event.target.value)} disabled={busy} maxLength={80} /></label>
-        <label className="field"><span>季別（選填）</span><input value={form.season} onChange={(event) => updateField("season", event.target.value)} disabled={busy} maxLength={80} /></label>
+        <label className="field"><span>品號</span><input value={form.itemCode} onChange={(event) => updateField("itemCode", event.target.value)} disabled={busy || keyLocked || confirmationOnly} maxLength={100} /></label>
+        <label className="field"><span>品名</span><input value={form.itemName} onChange={(event) => updateField("itemName", event.target.value)} disabled={busy || confirmationOnly} maxLength={255} /></label>
+        <label className="field"><span>單位</span><input value={form.unit} onChange={(event) => updateField("unit", event.target.value)} disabled={busy || confirmationOnly} maxLength={40} /></label>
+        <label className="field"><span>尺寸（選填）</span><input value={form.size} onChange={(event) => updateField("size", event.target.value)} disabled={busy || confirmationOnly} maxLength={80} /></label>
+        <label className="field"><span>分類（選填）</span><input value={form.category} onChange={(event) => updateField("category", event.target.value)} disabled={busy || confirmationOnly} maxLength={80} /></label>
+        <label className="field"><span>季別（選填）</span><input value={form.season} onChange={(event) => updateField("season", event.target.value)} disabled={busy || confirmationOnly} maxLength={80} /></label>
       </div> : null}
       {entityType === "SUPPLIERS" ? <div className="form-grid">
         <label className="field"><span>供應商代碼</span><input value={form.supplierCode} onChange={(event) => updateField("supplierCode", event.target.value)} disabled={busy || keyLocked} maxLength={100} /></label>
@@ -268,12 +294,15 @@ export default function ProductMasterEditorPanel({ itemEditRequest }: Props) {
         <label className="field"><span>MOQ</span><input type="number" min={0} step={1} value={form.minimumOrderQuantity} onChange={(event) => updateField("minimumOrderQuantity", event.target.value)} disabled={busy} /></label>
         <label className="field"><span>供應商品號（選填）</span><input value={form.supplierItemCode} onChange={(event) => updateField("supplierItemCode", event.target.value)} disabled={busy} maxLength={100} /></label>
       </div> : null}
-      <label className="checkbox-field"><input type="checkbox" checked={form.isActive} onChange={(event) => updateField("isActive", event.target.checked)} disabled={busy} />啟用此主檔</label>
+      {!confirmationOnly ? <label className="checkbox-field"><input type="checkbox" checked={form.isActive} onChange={(event) => updateField("isActive", event.target.checked)} disabled={busy} />啟用此主檔</label> : null}
       <div className="button-row">
-        <button className="primary-button" type="button" onClick={() => void saveForm()} disabled={busy}>{busy ? "保存中…" : editingKey ? "保存修改" : "新增主檔"}</button>
-        <button className="secondary-button" type="button" onClick={() => void deactivate()} disabled={busy || !editingKey}>停用／刪除</button>
-        <button className="secondary-button" type="button" onClick={() => resetEditor()} disabled={busy}>清除並新增</button>
-        <button className="secondary-button" type="button" onClick={() => setReloadToken((value) => value + 1)} disabled={busy}>重新整理既有資料</button>
+        {intent === "DEACTIVATE"
+          ? <button className="danger-button" type="button" onClick={() => void deactivate()} disabled={busy || !editingKey}>{busy ? "停用中…" : "確認停用"}</button>
+          : <button className="primary-button" type="button" onClick={() => void saveForm()} disabled={busy}>{busy ? "保存中…" : editingKey ? "儲存修改" : "新增主檔"}</button>}
+        {intent !== "DEACTIVATE" && !catalogItemEditor ? <button className="secondary-button" type="button" onClick={() => void deactivate()} disabled={busy || !editingKey}>停用／刪除</button> : null}
+        {intent !== "DEACTIVATE" && !catalogItemEditor ? <button className="secondary-button" type="button" onClick={() => resetEditor()} disabled={busy}>清除並新增</button> : null}
+        {!catalogItemEditor ? <button className="secondary-button" type="button" onClick={() => setReloadToken((value) => value + 1)} disabled={busy}>重新整理既有資料</button> : null}
+        {onCancel ? <button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>取消並返回列表</button> : null}
       </div>
       <p className={message.includes("失敗") || message.includes("拒絕") ? "auth-message" : "success-note"} role="status">{message}</p>
     </section>

@@ -1,5 +1,27 @@
 export type ProductEntityType = "UNIFORM_ITEMS" | "SUPPLIERS" | "SUPPLIER_ITEMS";
 
+export type ProductCatalogStatus = "ALL" | "ACTIVE" | "INACTIVE";
+export type ProductCatalogSortKey = "item_code" | "item_name" | "category" | "supplier";
+export type ProductCatalogSortDirection = "asc" | "desc";
+
+export type ProductCatalogEntry = {
+  id: string;
+  item_code: string;
+  item_name: string;
+  unit: string;
+  size: string | null;
+  category: string | null;
+  season: string | null;
+  is_active: boolean;
+  supplierSummary: string[];
+};
+
+export type ProductCatalogFilter = {
+  query: string;
+  category: string;
+  status: ProductCatalogStatus;
+};
+
 export type ProductEditorForm = {
   itemCode: string;
   itemName: string;
@@ -32,6 +54,47 @@ export const emptyProductEditorForm: ProductEditorForm = {
 
 function clean(value: string): string {
   return value.trim();
+}
+
+function compareText(left: string, right: string): number {
+  return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+}
+
+export function productCatalogCategories(rows: readonly ProductCatalogEntry[]): string[] {
+  return Array.from(new Set(rows.map((row) => clean(row.category ?? "")).filter(Boolean))).sort(compareText);
+}
+
+export function filterProductCatalog(rows: readonly ProductCatalogEntry[], filter: ProductCatalogFilter): ProductCatalogEntry[] {
+  const query = clean(filter.query).toLocaleLowerCase("zh-Hant");
+  return rows.filter((row) => {
+    if (filter.category !== "ALL" && row.category !== filter.category) return false;
+    if (filter.status === "ACTIVE" && !row.is_active) return false;
+    if (filter.status === "INACTIVE" && row.is_active) return false;
+    if (!query) return true;
+    const searchable = [
+      row.item_code,
+      row.item_name,
+      row.unit,
+      row.size,
+      row.category,
+      row.season,
+      ...row.supplierSummary,
+    ].filter(Boolean).join(" ").toLocaleLowerCase("zh-Hant");
+    return searchable.includes(query);
+  });
+}
+
+export function sortProductCatalog(
+  rows: readonly ProductCatalogEntry[],
+  key: ProductCatalogSortKey,
+  direction: ProductCatalogSortDirection,
+): ProductCatalogEntry[] {
+  const multiplier = direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const leftValue = key === "supplier" ? left.supplierSummary.join(" ") : String(left[key] ?? "");
+    const rightValue = key === "supplier" ? right.supplierSummary.join(" ") : String(right[key] ?? "");
+    return compareText(leftValue, rightValue) * multiplier;
+  });
 }
 
 export function productEditorKey(entityType: ProductEntityType, form: ProductEditorForm): string {
