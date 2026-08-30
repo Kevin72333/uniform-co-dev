@@ -13,7 +13,7 @@
 
 ## 資料與權限界線
 
-`ReportingPanel` 只對目前選定的 view 執行 `select('*').limit(200)`，不建立報表資料表、不回寫業務來源，也不繞過底層資料表 RLS。切換報表後自動載入，畫面提供即時搜尋、欄位排序、25／50／100 筆分頁與手動重新整理。
+`ReportingPanel` 只對目前選定的 view 執行 `select('*').limit(200)`，不建立報表資料表、不回寫業務來源，也不繞過底層資料表 RLS。切換報表後自動載入；`reporting-catalog` 處理中文顯示語意與搜尋排序，`ManagementCatalogTable` 處理欄位顯示、密度、25／50／100 筆完整分頁與 sticky header。
 
 一般營運報表不自行新增下載按鈕。現有 CSV 匯出仍由庫存管理的 `InventoryHistoryExportPanel` 與 `record_report_export` allowlist／稽核 RPC 負責；若日後要開放其他報表匯出，必須先擴充伺服器端角色、資料集 allowlist、筆數限制、冪等與稽核契約。
 

@@ -4,7 +4,7 @@
 
 `ModuleWorkbench` 是正式 Next.js 應用的子功能導覽 seam。它把同一業務模組內的標題、說明、工具列、頁籤、ARIA 關聯與內容狀態保存集中在一個深模組；呼叫端只需提供頁籤 id、名稱與內容。`RetainedPanelSet` 是其下層的掛載 seam，並由 workspace 與 workspace module 導覽共同使用。
 
-商品、組織與員工頁籤內的大型清單再共用 [`ManagementCatalogTable`](./management-catalog.md)，集中欄位顯示、密度、每頁筆數與完整分頁；`ModuleWorkbench` 不重複承擔清單資料操作。
+商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼的大型清單再共用 [`ManagementCatalogTable`](./management-catalog.md)，集中欄位顯示、密度、每頁筆數與完整分頁；`ModuleWorkbench` 不重複承擔清單資料操作。
 
 預設 `visited` mount policy 只掛載目前 panel；使用者實際開啟後才保留該 panel instance，切換時以 `hidden` 保存未送出的草稿。這個策略同時套用在七個 workspace、各 workspace module 與 `ModuleWorkbench` 子頁籤，避免登入後由尚未開啟的面板同時發出 Supabase 查詢。資料讀寫 implementation 仍留在原 panel、domain function、server-side route 與 Supabase RPC，工作台不繞過 RLS、冪等、稽核或 POST 狀態機。
 

@@ -13,8 +13,7 @@ import {
   type ReportSortDirection,
 } from "@/src/domain/reporting-catalog";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
-
-const pageSizes = [25, 50, 100] as const;
+import ManagementCatalogTable from "./ManagementCatalogTable";
 
 export default function ReportingPanel() {
   const client = getSupabaseBrowserClient();
@@ -23,7 +22,6 @@ export default function ReportingPanel() {
   const [query, setQuery] = useState("");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<ReportSortDirection>("asc");
-  const [pageSize, setPageSize] = useState<(typeof pageSizes)[number]>(25);
   const [page, setPage] = useState(1);
   const [reloadToken, setReloadToken] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
@@ -39,9 +37,6 @@ export default function ReportingPanel() {
     () => sortReportRows(filteredRows, sortColumn, sortDirection),
     [filteredRows, sortColumn, sortDirection],
   );
-  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const visibleRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   useEffect(() => {
     if (!client) return;
@@ -87,11 +82,6 @@ export default function ReportingPanel() {
     setPage(1);
   }
 
-  function sortMark(column: string) {
-    if (sortColumn !== column) return "↕";
-    return sortDirection === "asc" ? "↑" : "↓";
-  }
-
   return (
     <section className="panel reporting-panel" aria-label="只讀營運報表">
       <div className="panel-heading">
@@ -106,7 +96,6 @@ export default function ReportingPanel() {
       <div className="reporting-toolbar">
         <label className="field"><span>營運報表</span><select value={reportName} onChange={(event) => changeReport(event.target.value as ReportName)} disabled={busy}>{reportDefinitions.map((definition) => <option key={definition.name} value={definition.name}>{definition.label}</option>)}</select></label>
         <label className="field"><span>搜尋目前結果</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="輸入單號、品號、名稱、狀態或數量…" /></label>
-        <label className="field"><span>每頁筆數</span><select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value) as (typeof pageSizes)[number]); setPage(1); }}>{pageSizes.map((size) => <option key={size} value={size}>{size} 筆</option>)}</select></label>
         <div className="field reporting-refresh"><span>&nbsp;</span><button className="secondary-button" type="button" onClick={() => setReloadToken((value) => value + 1)} disabled={busy}>{busy ? "讀取中…" : "重新整理"}</button></div>
       </div>
 
@@ -119,25 +108,35 @@ export default function ReportingPanel() {
       </div>
 
       <div className="management-catalog-result reporting-result">
-        <p className="muted" role="status">{message}；目前顯示 {visibleRows.length} 筆</p>
+        <p className="muted" role="status">{message}；符合條件 {sortedRows.length} 筆</p>
         {query ? <button className="text-button product-filter-reset" type="button" onClick={() => { setQuery(""); setPage(1); }}>清除搜尋</button> : null}
       </div>
 
-      {rows.length > 0 && columns.length > 0 ? <>
-        <div className="table-scroll management-catalog-table reporting-table">
-          <table>
-            <thead><tr>{columns.map((column) => <th key={column.key}><button className="table-sort-button" type="button" onClick={() => toggleSort(column.key)} title={`依${column.label}排序`}>{column.label} {sortMark(column.key)}</button></th>)}</tr></thead>
-            <tbody>{visibleRows.map((row, index) => <tr key={`${reportName}-${(currentPage - 1) * pageSize + index}`}>{columns.map((column) => {
-              const displayValue = formatReportValue(column.key, row[column.key]);
-              return <td className="reporting-cell" key={column.key} title={displayValue}>{displayValue}</td>;
-            })}</tr>)}</tbody>
-          </table>
-        </div>
-        <div className="management-pagination reporting-pagination" aria-label="營運報表分頁">
-          <span>第 {currentPage}／{pageCount} 頁，共 {sortedRows.length} 筆</span>
-          <div><button className="secondary-button" type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一頁</button><button className="secondary-button" type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一頁</button></div>
-        </div>
-      </> : <p className="empty-state">{busy ? "正在讀取報表…" : "尚無資料或目前帳號沒有此報表的讀取權限。"}</p>}
+      <ManagementCatalogTable<ReportRow, string>
+        ariaLabel={report.label}
+        rows={sortedRows}
+        rowKey={(_, index) => `${reportName}-${index}`}
+        page={page}
+        onPageChange={setPage}
+        sortKey={sortColumn ?? ""}
+        sortDirection={sortDirection}
+        onSort={toggleSort}
+        defaultPageSize={25}
+        pageSizeOptions={[25, 50, 100]}
+        tableClassName="reporting-table"
+        emptyState={<p className="empty-state">{busy ? "正在讀取報表…" : "尚無符合條件的資料，或目前帳號沒有此報表的讀取權限。"}</p>}
+        columns={columns.map((column, index) => ({
+          id: column.key,
+          label: column.label,
+          sortKey: column.key,
+          locked: index === 0,
+          className: "reporting-cell",
+          render: (row: ReportRow) => {
+            const displayValue = formatReportValue(column.key, row[column.key]);
+            return <span title={displayValue}>{displayValue}</span>;
+          },
+        }))}
+      />
     </section>
   );
 }

@@ -15,6 +15,24 @@ export type InventoryAvailabilityRow = {
 };
 
 export type InventoryAvailabilityStatus = "AVAILABLE" | "OUT_OF_STOCK" | "INACTIVE" | "DATA_ERROR";
+export type InventoryAvailabilityStatusFilter = "ALL" | InventoryAvailabilityStatus;
+export type InventoryAvailabilitySortKey =
+  | "item_code"
+  | "item_name"
+  | "category"
+  | "hr_on_hand"
+  | "general_on_hand"
+  | "combined_on_hand"
+  | "active_reserved"
+  | "available_to_request"
+  | "status";
+export type InventoryAvailabilitySortDirection = "asc" | "desc";
+
+export type InventoryAvailabilityFilters = {
+  query: string;
+  category: string;
+  status: InventoryAvailabilityStatusFilter;
+};
 
 function textValue(value: unknown): string {
   return value === null || value === undefined ? "" : String(value);
@@ -64,4 +82,53 @@ export function inventoryAvailabilityStatusLabel(status: InventoryAvailabilitySt
     DATA_ERROR: "資料異常",
   };
   return labels[status];
+}
+
+export function inventoryAvailabilityCategories(rows: readonly InventoryAvailabilityRow[]): string[] {
+  return [...new Set(rows.map((row) => row.category?.trim()).filter((value): value is string => Boolean(value)))]
+    .sort((left, right) => left.localeCompare(right, "zh-TW", { numeric: true }));
+}
+
+export function filterInventoryAvailability(
+  rows: readonly InventoryAvailabilityRow[],
+  filters: InventoryAvailabilityFilters,
+): InventoryAvailabilityRow[] {
+  const query = filters.query.trim().toLocaleLowerCase("zh-TW");
+  return rows.filter((row) => {
+    const status = inventoryAvailabilityStatus(row);
+    if (filters.status !== "ALL" && status !== filters.status) return false;
+    if (filters.category !== "ALL" && row.category !== filters.category) return false;
+    if (!query) return true;
+    return [row.itemCode, row.itemName, row.size, row.category, row.season, row.unit]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("zh-TW")
+      .includes(query);
+  });
+}
+
+export function sortInventoryAvailability(
+  rows: readonly InventoryAvailabilityRow[],
+  sortKey: InventoryAvailabilitySortKey,
+  direction: InventoryAvailabilitySortDirection,
+): InventoryAvailabilityRow[] {
+  const factor = direction === "asc" ? 1 : -1;
+  const numericValues: Partial<Record<InventoryAvailabilitySortKey, (row: InventoryAvailabilityRow) => number>> = {
+    hr_on_hand: (row) => row.hrOnHand,
+    general_on_hand: (row) => row.generalOnHand,
+    combined_on_hand: (row) => row.combinedOnHand,
+    active_reserved: (row) => row.activeReserved,
+    available_to_request: (row) => row.availableToRequest,
+  };
+  const numericValue = numericValues[sortKey];
+  function textSortValue(row: InventoryAvailabilityRow): string {
+    if (sortKey === "item_name") return row.itemName;
+    if (sortKey === "category") return row.category ?? "";
+    if (sortKey === "status") return inventoryAvailabilityStatusLabel(inventoryAvailabilityStatus(row));
+    return row.itemCode;
+  }
+  return [...rows].sort((left, right) => {
+    if (numericValue) return (numericValue(left) - numericValue(right)) * factor;
+    return textSortValue(left).localeCompare(textSortValue(right), "zh-TW", { numeric: true }) * factor;
+  });
 }

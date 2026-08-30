@@ -21,7 +21,7 @@ export type ManagementCatalogColumn<Row, SortKey extends string> = {
 type Props<Row, SortKey extends string> = {
   ariaLabel: string;
   rows: readonly Row[];
-  rowKey: (row: Row) => string;
+  rowKey: (row: Row, absoluteIndex: number) => string;
   columns: readonly ManagementCatalogColumn<Row, SortKey>[];
   page: number;
   onPageChange: (page: number) => void;
@@ -123,7 +123,7 @@ export default function ManagementCatalogTable<Row, SortKey extends string>({
               ? <button className="table-sort-button" type="button" onClick={() => onSort(column.sortKey as SortKey)}>{column.label} {sortMark(column.sortKey)}</button>
               : column.label}
           </th>)}</tr></thead>
-          <tbody>{pageRows.map((row) => <tr key={rowKey(row)}>{visibleColumns.map((column) => <td key={column.id} className={column.className}>{column.render(row)}</td>)}</tr>)}</tbody>
+          <tbody>{pageRows.map((row, index) => <tr key={rowKey(row, (window.currentPage - 1) * pageSize + index)}>{visibleColumns.map((column) => <td key={column.id} className={column.className}>{column.render(row)}</td>)}</tr>)}</tbody>
         </table>
       </div>
 

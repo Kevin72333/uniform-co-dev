@@ -261,8 +261,13 @@ body {
 .workspace-section > .workspace { min-width: 0; }
 .workspace-panel-grid > .import-panel { margin-top: 0; }
 .workspace-section > .workspace { margin-top: 0; }
-.inventory-toolbar { align-items: end; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 220px auto; margin-top: 18px; }
+.inventory-toolbar { align-items: end; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 180px 190px auto; margin-top: 18px; }
 .inventory-toolbar-action { align-self: end; }
+.inventory-availability-metrics,
+.procurement-reason-metrics { margin-top: 18px; }
+.inventory-availability-table { max-height: 620px; }
+.procurement-reason-editor-heading { margin-top: 24px; }
+.procurement-reason-mode { font-size: 22px !important; }
 .catalog-toolbar { align-items: end; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) auto; margin-top: 18px; }
 .catalog-toolbar-action { align-self: end; }
 .product-management-header,
@@ -365,7 +370,7 @@ body {
 .product-import-grid .product-boundary-card { grid-column: 1 / -1; }
 .organization-management-notice { margin: 0; }
 .organization-import-grid .organization-boundary-card { min-width: 0; }
-.reporting-toolbar { align-items: end; display: grid; gap: 14px; grid-template-columns: minmax(210px, .8fr) minmax(240px, 1.2fr) 120px auto; }
+.reporting-toolbar { align-items: end; display: grid; gap: 14px; grid-template-columns: minmax(210px, .8fr) minmax(240px, 1.2fr) auto; }
 .reporting-refresh .secondary-button { margin-top: 0; white-space: nowrap; }
 .reporting-description { align-items: baseline; background: color-mix(in srgb, var(--accent) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line)); border-radius: 14px; display: flex; gap: 12px; margin-top: 18px; padding: 13px 15px; }
 .reporting-description strong { flex: 0 0 auto; font-size: 13px; }

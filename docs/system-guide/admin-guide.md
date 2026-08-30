@@ -88,6 +88,8 @@ Migration 正式來源為 `supabase/migrations/`，目前版本到 `0079_employe
 7. 匯入員工。
 8. 確認只有一個啟用中的 `purpose = 'HR'` 人資倉與一個啟用中的 `purpose = 'GENERAL'` 總倉。
 
+正式採購前，系統管理員另需在「採購與入庫 → 採購決策 → 採購差異原因碼」建立公司核准的原因碼。新增後從清單按「編輯」調整名稱或狀態；原因碼本身是穩定識別，不可用改名取代新建，停用也不會刪除既有採購歷史。
+
 CSV 範本位於 `docs/deployment/onboarding/templates/`。正式資料不要覆寫版本化空白範本；可放到已被 `.gitignore` 排除的 `docs/deployment/onboarding/private/`，或直接透過受保護 UI 匯入。
 
 ### 期初庫存切換
