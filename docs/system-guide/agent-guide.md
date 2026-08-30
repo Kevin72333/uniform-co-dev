@@ -10,7 +10,7 @@
 4. 依需求讀 `docs/spec/`、`docs/architecture/`、`docs/implementation/roadmap.md` 與 `docs/deployment/`。
 5. 先找 workspace、panel、domain function、server API、RPC／RLS seam，再做最小 patch。
 
-分析基準為 2026-08-30 的 `main`。最近功能提交依序包含員工主檔、營運報表中文化、組織主檔、visited mount、工作區模組化、商品管理重構與庫存模組。正式狀態仍是 `NOT_READY`，不可由本機測試或 UI smoke 自動改成 READY。
+分析基準為 2026-08-31 的 `main`。最近功能包含共用管理清單、員工主檔、營運報表中文化、組織主檔、visited mount、工作區模組化、商品管理重構與庫存模組。正式狀態仍是 `NOT_READY`，不可由本機測試或 UI smoke 自動改成 READY。
 
 ## 2. 技術架構
 
@@ -38,6 +38,8 @@ Durable import / PDF / ERP / Storage cleanup / retention
 ## 3. UI 模組與導覽
 
 `workspaceDefinitions` 集中工作區、模組與搜尋索引；`WorkspaceShell` 管理 hash navigation、登入 gate、responsive shell 與 workspace mounting。`RetainedPanelSet` 預設使用 `visited` mount：未造訪 panel 不查詢，造訪後切換仍保留表單狀態。`ModuleWorkbench` 是同一模組內的任務頁籤 seam。
+
+`ManagementCatalogTable` 是商品、組織與員工清單的共用 interface：呼叫端提供 rows 與欄位定義，implementation 集中欄位顯示、密度、每頁筆數、範圍與首末頁導覽；純 page／column 規則在 `management-catalog.ts`。不要把資料查詢、RLS、匯出稽核或停用 mutation 搬進這個 UI module。
 
 七個正式工作區：
 
@@ -162,6 +164,7 @@ node -e "const fs=require('fs'),vm=require('vm'); const h=fs.readFileSync('proto
 - 員工主檔獨立模組、完整單筆表單、停用、匯入與稽核匯出。
 - 營運報表中文欄位、搜尋、排序、分頁與即時刷新。
 - 組織主檔與商品管理的清單／表單／匯入匯出深模組。
+- 商品、組織、員工共用管理清單的欄位顯示、密度、每頁筆數與完整分頁。
 - Workspace／ModuleWorkbench visited mount，避免登入後 eager 查詢。
 - 庫存管理整合兩倉可用量、期初、操作入口與歷史匯出。
 

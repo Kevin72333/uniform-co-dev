@@ -11,6 +11,7 @@ import {
   type OrganizationEntityType,
 } from "@/src/domain/organization-management";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
+import ManagementCatalogTable from "./ManagementCatalogTable";
 
 type InstitutionSource = { id: string; code: string; name: string; is_active: boolean };
 type DepartmentSource = { id: string; institution_id: string; code: string; name: string; is_active: boolean };
@@ -22,8 +23,6 @@ type Props = {
   onEdit: (entry: OrganizationEditRequest) => void;
   onDeactivate: (entry: OrganizationEditRequest) => void;
 };
-
-const pageSize = 25;
 
 function buildRows(institutions: InstitutionSource[], departments: DepartmentSource[]): OrganizationCatalogEntry[] {
   const institutionById = new Map(institutions.map((institution) => [institution.id, institution]));
@@ -97,9 +96,6 @@ export default function OrganizationCatalogPanel({ refreshToken = 0, onEdit, onD
     () => sortOrganizationCatalog(filterOrganizationCatalog(rows, { query, entityType, status }), sortKey, sortDirection),
     [entityType, query, rows, sortDirection, sortKey, status],
   );
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const visibleRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const institutionCount = rows.filter((row) => row.entityType === "INSTITUTIONS").length;
   const departmentCount = rows.filter((row) => row.entityType === "DEPARTMENTS").length;
 
@@ -115,11 +111,6 @@ export default function OrganizationCatalogPanel({ refreshToken = 0, onEdit, onD
       setSortDirection("asc");
     }
     setPage(1);
-  }
-
-  function sortLabel(key: OrganizationCatalogSortKey) {
-    if (sortKey !== key) return "↕";
-    return sortDirection === "asc" ? "↑" : "↓";
   }
 
   return (
@@ -156,34 +147,25 @@ export default function OrganizationCatalogPanel({ refreshToken = 0, onEdit, onD
         {(query || entityType !== "ALL" || status !== "ALL") ? <button className="text-button" type="button" onClick={() => { setQuery(""); setEntityType("ALL"); setStatus("ALL"); setPage(1); }}>清除篩選</button> : null}
       </div>
 
-      {visibleRows.length > 0 ? <>
-        <div className="table-scroll management-catalog-table">
-          <table>
-            <thead><tr>
-              <th><button className="table-sort-button" type="button" onClick={() => toggleSort("type")}>類型 {sortLabel("type")}</button></th>
-              <th><button className="table-sort-button" type="button" onClick={() => toggleSort("institution")}>所屬機構 {sortLabel("institution")}</button></th>
-              <th><button className="table-sort-button" type="button" onClick={() => toggleSort("code")}>代碼 {sortLabel("code")}</button></th>
-              <th><button className="table-sort-button" type="button" onClick={() => toggleSort("name")}>名稱 {sortLabel("name")}</button></th>
-              <th>狀態</th><th>功能</th>
-            </tr></thead>
-            <tbody>{visibleRows.map((row) => <tr key={`${row.entityType}:${row.id}`}>
-              <td><span className="status-pill">{row.entityType === "INSTITUTIONS" ? "機構" : "部門"}</span></td>
-              <td>{row.entityType === "INSTITUTIONS" ? "—" : `${row.institutionCode}｜${row.institutionName}`}</td>
-              <td><strong>{row.code}</strong></td>
-              <td>{row.name}</td>
-              <td><span className={`status-pill ${row.isActive ? "success" : ""}`}>{row.isActive ? "啟用" : "停用"}</span></td>
-              <td><div className="management-table-actions">
-                <button className="management-row-action" type="button" onClick={() => onEdit(row)}>編輯</button>
-                <button className="management-row-action danger" type="button" onClick={() => onDeactivate(row)} disabled={!row.isActive}>{row.isActive ? "停用" : "已停用"}</button>
-              </div></td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-        <div className="management-pagination" aria-label="組織主檔清單分頁">
-          <span>第 {currentPage}／{pageCount} 頁</span>
-          <div><button className="secondary-button" type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一頁</button><button className="secondary-button" type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一頁</button></div>
-        </div>
-      </> : <p className="empty-state">尚無符合條件的組織主檔。請調整篩選，或使用上方新增按鈕建立第一筆資料。</p>}
+      <ManagementCatalogTable<OrganizationCatalogEntry, OrganizationCatalogSortKey>
+        ariaLabel="組織主檔清單"
+        rows={filteredRows}
+        rowKey={(row) => `${row.entityType}:${row.id}`}
+        page={page}
+        onPageChange={setPage}
+        sortKey={sortKey}
+        sortDirection={sortDirection}
+        onSort={toggleSort}
+        emptyState={<p className="empty-state">尚無符合條件的組織主檔。請調整篩選，或使用上方新增按鈕建立第一筆資料。</p>}
+        columns={[
+          { id: "type", label: "類型", sortKey: "type", render: (row) => <span className="status-pill">{row.entityType === "INSTITUTIONS" ? "機構" : "部門"}</span> },
+          { id: "institution", label: "所屬機構", sortKey: "institution", render: (row) => row.entityType === "INSTITUTIONS" ? "—" : `${row.institutionCode}｜${row.institutionName}` },
+          { id: "code", label: "代碼", sortKey: "code", locked: true, render: (row) => <strong>{row.code}</strong> },
+          { id: "name", label: "名稱", sortKey: "name", render: (row) => row.name },
+          { id: "status", label: "狀態", render: (row) => <span className={`status-pill ${row.isActive ? "success" : ""}`}>{row.isActive ? "啟用" : "停用"}</span> },
+          { id: "actions", label: "功能", locked: true, render: (row) => <div className="management-table-actions"><button className="management-row-action" type="button" onClick={() => onEdit(row)}>編輯</button><button className="management-row-action danger" type="button" onClick={() => onDeactivate(row)} disabled={!row.isActive}>{row.isActive ? "停用" : "已停用"}</button></div> },
+        ]}
+      />
     </section>
   );
 }

@@ -16,11 +16,11 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 
 `0079_employee_master_management.sql` 補上 HR-only 員工單筆新增／修改／停用與匯出稽核 RPC：新增與修改以員工 UUID 明確分流，工號建立後不可變，停用保留所有需求與發放歷史；正式站使用前須由使用者在 Supabase SQL Editor 執行該檔。
 
-## 正式應用接手狀態（2026-08-30）
+## 正式應用接手狀態（2026-08-31）
 
 正式 Next.js 應用已部署至 [uniform-co.vercel.app](https://uniform-co.vercel.app/)，程式碼由 GitHub `Kevin72333/uniform-co` 的 `main` 分支提供，資料與登入由 Supabase project 提供。正式操作必須先登入；未設定 Supabase env 或未有有效 session 時只顯示登入／設定畫面，不載入工作區資料。
 
-### 2026-08-30 repository-local 收尾快照
+### 2026-08-31 repository-local 收尾快照
 
 目前版本庫內能以程式、migration、測試與文件完成的安全防線已收尾；這不等於 production cutover 已通過。下一位 AI agent 接手時，先讀 [`agents.md`](./agents.md)，再執行 `git status --short` 與 `git log -5 --oneline`。目前 `main` 已包含已完成修改，預期只保留未追蹤 `prototype/`；除非需求明確指向 prototype，否則不要加入提交。使用者已要求每次修改驗證完成後自動推送 GitHub，推送前須 fetch／比較 `origin/main` 並只 stage 本次檔案。
 
@@ -38,8 +38,9 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - 庫存管理已集中為兩倉可用量、期初庫存耐久匯入、發貨／盤點／採購入庫／更正操作入口、庫存／流水 CSV 匯出與本機規則試算；`0076_inventory_report_export_audit.sql` 只記錄匯出 metadata，庫存數字仍由流水與 view 推導。
 - 營運報表的九張 security-invoker view 已集中到 `reporting-catalog` 顯示 seam：正式畫面使用對應中文欄名與常用狀態，並支援報表說明、即時搜尋、欄位排序、25／50／100 筆分頁及重新整理；原始 view 欄位與 RLS 不變。維護規則見 [`docs/architecture/reporting-catalog.md`](./docs/architecture/reporting-catalog.md)。
 - `ModuleWorkbench` 已成為正式 UI 的子功能 seam：商品、組織、帳號、庫存、人資需求／更正、倉庫盤點、採購決策／入庫、換季活動與正式文件都使用一致的工具列與任務頁籤。下層 `RetainedPanelSet` 同時管理七個 workspace、workspace module 與工作台子頁籤：預設首次開啟才掛載，之後保留未送出的 panel 狀態，避免未造訪模組在登入時同步查詢 Supabase。完整盤點、mount policy 與不拆分理由見 [`docs/architecture/module-workbench.md`](./docs/architecture/module-workbench.md)。
+- SPSV29 的大型清單操作已轉成正式共用 `ManagementCatalogTable` module，而未移植其全域狀態：商品、組織、員工主檔現在共用欄位顯示、舒適／緊湊密度、可調每頁筆數、目前資料範圍與第一／上一／下一／最後頁導覽。員工的離職日與備註可按需顯示；畫面設定不改 RLS、匯出集合或停用契約。interface 與維護規則見 [`docs/architecture/management-catalog.md`](./docs/architecture/management-catalog.md)。
 - System Guide 已整合至正式站 [`/system-guide`](https://uniform-co.vercel.app/system-guide)：`SYSTEM_ADMIN` 可在原 `WorkspaceShell` 左側或 topbar 開啟，原工作區導航保留，三份文件顯示在右側。文件按鈕使用固定 allowlist metadata 首屏建立，入口可見性使用本人 RLS `user_roles` 與同分頁 session cache 加速，文件內容仍由受保護 API 每次重新驗證 bearer session、有效帳號與 SYSTEM_ADMIN；頁面只渲染安全 typed blocks，不使用 `dangerouslySetInnerHTML`。同源文件與維護摘要位於 [`docs/system-guide/`](./docs/system-guide/README.md)。
-- 最新完整本機驗證：64 個 test files、263/263 tests 全數通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 無內容錯誤，僅有既存 LF→CRLF 提示。正式站另以 SYSTEM_ADMIN session 驗證 System Guide 三份文件、原左側導航與頁籤切換，未登入 `/api/system-guide` 回 401；修正後量測為工作區導航後約 37ms 顯示入口、說明外殼後約 32ms 顯示文件按鈕。
+- 最新完整本機驗證：65 個 test files、266/266 tests 全數通過，`npm run lint`、`npm run typecheck`、`npm run build` 與 System Guide parser tests 全部成功；`git diff --check` 沒有內容錯誤。正式狀態仍不因 repository-local 驗證轉為 READY。
 
 目前正式狀態仍是 **`NOT_READY`**。剩餘項目需要真實外部證據：第一批正式帳號／角色／需求窗口範圍、GitHub／Vercel owner 與 backup owner 移交、鼎新正式 mapping 與成功匯入樣本、正式 PDF 版面核准、Supabase migration／RLS／Auth／Storage／signed URL／並行 smoke、durable import worker 與 renderer 真實 staging integration、Storage destructive cleanup、DB 90-day retention destructive smoke、外部 error monitoring、production-sized DB＋Auth＋Storage 從零還原、RPO／RTO 實測、三年容量實測，以及最後 production cutover approval。
 
@@ -73,6 +74,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [匯入、匯出與鼎新 ERP](./docs/spec/import-export.md)
 - [驗收條件](./docs/spec/acceptance-criteria.md)
 - [系統架構](./docs/architecture/system-architecture.md)
+- [管理清單介面](./docs/architecture/management-catalog.md)
 - [資料保存、封存與容量政策](./docs/architecture/data-retention.md)
 - [免費方案官方限制查核](./docs/research/free-tier-constraints.md)
 - [實作路線圖](./docs/implementation/roadmap.md)

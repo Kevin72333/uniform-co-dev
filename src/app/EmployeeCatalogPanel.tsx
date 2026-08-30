@@ -13,6 +13,7 @@ import {
 import { masterRowsToCsv } from "@/src/domain/master-data";
 import { canonicalFingerprint } from "@/src/lib/fingerprint";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
+import ManagementCatalogTable from "./ManagementCatalogTable";
 
 type InstitutionSource = { id: string; code: string; name: string; is_active: boolean };
 type DepartmentSource = { id: string; institution_id: string; code: string; name: string; is_active: boolean };
@@ -25,8 +26,6 @@ type Props = {
   onEdit: (entry: EmployeeEditRequest) => void;
   onDeactivate: (entry: EmployeeEditRequest) => void;
 };
-
-const pageSize = 25;
 
 function buildRows(employees: EmployeeSource[], institutions: InstitutionSource[], departments: DepartmentSource[]): EmployeeCatalogEntry[] {
   const institutionById = new Map(institutions.map((row) => [row.id, row]));
@@ -94,20 +93,12 @@ export default function EmployeeCatalogPanel({ refreshToken = 0, onEdit, onDeact
 
   const filteredRows = useMemo(() => filterEmployeeCatalog(rows, { query, status, institutionCode }), [institutionCode, query, rows, status]);
   const sortedRows = useMemo(() => sortEmployeeCatalog(filteredRows, sortKey, sortDirection), [filteredRows, sortDirection, sortKey]);
-  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const visibleRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const institutionOptions = [...new Map(rows.map((row) => [row.institutionCode, row.institutionName])).entries()].sort(([left], [right]) => left.localeCompare(right, "zh-Hant", { numeric: true }));
 
   function toggleSort(nextKey: EmployeeCatalogSortKey) {
     if (sortKey === nextKey) setSortDirection((value) => value === "asc" ? "desc" : "asc");
     else { setSortKey(nextKey); setSortDirection("asc"); }
     setPage(1);
-  }
-
-  function sortMark(key: EmployeeCatalogSortKey) {
-    if (sortKey !== key) return "↕";
-    return sortDirection === "asc" ? "↑" : "↓";
   }
 
   async function exportEmployees() {
@@ -162,16 +153,30 @@ export default function EmployeeCatalogPanel({ refreshToken = 0, onEdit, onDeact
         <label className="field"><span>機構</span><select value={institutionCode} onChange={(event) => { setInstitutionCode(event.target.value); setPage(1); }}><option value="">全部機構</option>{institutionOptions.map(([code, name]) => <option key={code} value={code}>{code}｜{name}</option>)}</select></label>
       </div>
       <div className="management-catalog-result"><p className="muted" role="status">{message}；符合條件 {sortedRows.length} 筆</p>{query || status !== "ALL" || institutionCode ? <button className="text-button product-filter-reset" type="button" onClick={() => { setQuery(""); setStatus("ALL"); setInstitutionCode(""); setPage(1); }}>清除篩選</button> : null}</div>
-      {visibleRows.length ? <>
-        <div className="table-scroll management-catalog-table employee-catalog-table"><table><thead><tr>
-          <th><button className="table-sort-button" type="button" onClick={() => toggleSort("employeeNo")}>工號 {sortMark("employeeNo")}</button></th>
-          <th><button className="table-sort-button" type="button" onClick={() => toggleSort("name")}>姓名 {sortMark("name")}</button></th>
-          <th><button className="table-sort-button" type="button" onClick={() => toggleSort("institution")}>機構 {sortMark("institution")}</button></th>
-          <th><button className="table-sort-button" type="button" onClick={() => toggleSort("department")}>部門 {sortMark("department")}</button></th>
-          <th>職稱</th><th><button className="table-sort-button" type="button" onClick={() => toggleSort("hireDate")}>到職日 {sortMark("hireDate")}</button></th><th><button className="table-sort-button" type="button" onClick={() => toggleSort("status")}>狀態 {sortMark("status")}</button></th><th>功能</th>
-        </tr></thead><tbody>{visibleRows.map((row) => <tr key={row.id}><td><strong>{row.employeeNo}</strong></td><td>{row.name}</td><td>{row.institutionCode}｜{row.institutionName}</td><td>{row.departmentCode}｜{row.departmentName}</td><td>{row.jobTitle || "—"}</td><td>{row.hireDate || "—"}</td><td><span className={`status-pill ${row.employmentStatus === "ACTIVE" ? "success" : ""}`}>{row.employmentStatus === "ACTIVE" ? "在職" : "離職／停用"}</span></td><td><div className="management-table-actions"><button className="management-row-action" type="button" onClick={() => onEdit(row)}>編輯</button><button className="management-row-action danger" type="button" onClick={() => onDeactivate(row)} disabled={row.employmentStatus === "INACTIVE"}>{row.employmentStatus === "ACTIVE" ? "停用" : "已停用"}</button></div></td></tr>)}</tbody></table></div>
-        <div className="management-pagination"><span>第 {currentPage}／{pageCount} 頁</span><div><button className="secondary-button" type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一頁</button><button className="secondary-button" type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一頁</button></div></div>
-      </> : <p className="empty-state">尚無符合條件的員工主檔。</p>}
+      <ManagementCatalogTable<EmployeeCatalogEntry, EmployeeCatalogSortKey>
+        ariaLabel="員工主檔清單"
+        rows={sortedRows}
+        rowKey={(row) => row.id}
+        page={page}
+        onPageChange={setPage}
+        sortKey={sortKey}
+        sortDirection={sortDirection}
+        onSort={toggleSort}
+        tableClassName="employee-catalog-table"
+        emptyState={<p className="empty-state">尚無符合條件的員工主檔。</p>}
+        columns={[
+          { id: "employee-no", label: "工號", sortKey: "employeeNo", locked: true, render: (row) => <strong>{row.employeeNo}</strong> },
+          { id: "name", label: "姓名", sortKey: "name", render: (row) => row.name },
+          { id: "institution", label: "機構", sortKey: "institution", render: (row) => `${row.institutionCode}｜${row.institutionName}` },
+          { id: "department", label: "部門", sortKey: "department", render: (row) => `${row.departmentCode}｜${row.departmentName}` },
+          { id: "job-title", label: "職稱", render: (row) => row.jobTitle || "—" },
+          { id: "hire-date", label: "到職日", sortKey: "hireDate", render: (row) => row.hireDate || "—" },
+          { id: "termination-date", label: "離職日", defaultVisible: false, render: (row) => row.terminationDate || "—" },
+          { id: "note", label: "備註", defaultVisible: false, className: "management-note-cell", render: (row) => row.note || "—" },
+          { id: "status", label: "狀態", sortKey: "status", render: (row) => <span className={`status-pill ${row.employmentStatus === "ACTIVE" ? "success" : ""}`}>{row.employmentStatus === "ACTIVE" ? "在職" : "離職／停用"}</span> },
+          { id: "actions", label: "功能", locked: true, render: (row) => <div className="management-table-actions"><button className="management-row-action" type="button" onClick={() => onEdit(row)}>編輯</button><button className="management-row-action danger" type="button" onClick={() => onDeactivate(row)} disabled={row.employmentStatus === "INACTIVE"}>{row.employmentStatus === "ACTIVE" ? "停用" : "已停用"}</button></div> },
+        ]}
+      />
     </section>
   );
 }

@@ -11,6 +11,7 @@ import {
   type ProductCatalogStatus,
 } from "@/src/domain/product-management";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
+import ManagementCatalogTable from "./ManagementCatalogTable";
 
 type ItemSource = Omit<ProductCatalogEntry, "supplierSummary">;
 type SupplierSource = { id: string; supplier_code: string; name: string };
@@ -41,8 +42,6 @@ type Props = {
   onEditItem: (item: ProductItemEditRequest) => void;
   onDeactivateItem: (item: ProductItemEditRequest) => void;
 };
-
-const pageSize = 20;
 
 export default function ProductCatalogPanel({ refreshToken = 0, onEditItem, onDeactivateItem }: Props) {
   const client = getSupabaseBrowserClient();
@@ -92,9 +91,6 @@ export default function ProductCatalogPanel({ refreshToken = 0, onEditItem, onDe
     () => sortProductCatalog(filterProductCatalog(rows, { query, category, status }), sortKey, sortDirection),
     [category, query, rows, sortDirection, sortKey, status],
   );
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const visibleRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const associatedCount = rows.filter((row) => row.supplierSummary.length > 0).length;
 
   function selectCategory(nextCategory: string) {
@@ -110,11 +106,6 @@ export default function ProductCatalogPanel({ refreshToken = 0, onEditItem, onDe
       setSortDirection("asc");
     }
     setPage(1);
-  }
-
-  function sortLabel(key: ProductCatalogSortKey) {
-    if (sortKey !== key) return "↕";
-    return sortDirection === "asc" ? "↑" : "↓";
   }
 
   return (
@@ -162,42 +153,30 @@ export default function ProductCatalogPanel({ refreshToken = 0, onEditItem, onDe
         {(query || category !== "ALL" || status !== "ALL") ? <button className="text-button product-filter-reset" type="button" onClick={() => { setQuery(""); setCategory("ALL"); setStatus("ALL"); setPage(1); }}>清除篩選</button> : null}
       </div>
 
-      {visibleRows.length > 0 ? (
-        <>
-          <div className="table-scroll product-catalog-table">
-            <table>
-              <thead><tr>
-                <th><button className="table-sort-button" type="button" onClick={() => toggleSort("item_code")}>品號 {sortLabel("item_code")}</button></th>
-                <th><button className="table-sort-button" type="button" onClick={() => toggleSort("item_name")}>品名 {sortLabel("item_name")}</button></th>
-                <th><button className="table-sort-button" type="button" onClick={() => toggleSort("category")}>分類 {sortLabel("category")}</button></th>
-                <th>規格／季別</th><th>單位</th>
-                <th><button className="table-sort-button" type="button" onClick={() => toggleSort("supplier")}>供應商／MOQ {sortLabel("supplier")}</button></th>
-                <th>狀態</th><th>功能</th>
-              </tr></thead>
-              <tbody>{visibleRows.map((row) => <tr key={row.id}>
-                <td><strong>{row.item_code || "—"}</strong></td>
-                <td>{row.item_name || "—"}</td>
-                <td>{row.category || "未分類"}</td>
-                <td>{[row.size, row.season].filter(Boolean).join("／") || "—"}</td>
-                <td>{row.unit || "—"}</td>
-                <td className="product-supplier-cell">{row.supplierSummary.length > 0 ? row.supplierSummary.join("；") : <span className="muted">尚未建立供應關係</span>}</td>
-                <td><span className={`status-pill ${row.is_active ? "success" : ""}`}>{row.is_active ? "啟用" : "停用"}</span></td>
-                <td><div className="product-table-actions">
-                  <button className="product-row-action" type="button" onClick={() => onEditItem(row)}>編輯</button>
-                  <button className="product-row-action danger" type="button" onClick={() => onDeactivateItem(row)} disabled={!row.is_active}>{row.is_active ? "停用" : "已停用"}</button>
-                </div></td>
-              </tr>)}</tbody>
-            </table>
-          </div>
-          <div className="product-pagination" aria-label="商品清單分頁">
-            <span>第 {currentPage}／{pageCount} 頁</span>
-            <div>
-              <button className="secondary-button" type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一頁</button>
-              <button className="secondary-button" type="button" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一頁</button>
-            </div>
-          </div>
-        </>
-      ) : <p className="empty-state">尚無符合條件的商品資料。請調整篩選，或使用「新增商品」建立第一筆資料。</p>}
+      <ManagementCatalogTable<ProductCatalogEntry, ProductCatalogSortKey>
+        ariaLabel="商品清單"
+        rows={filteredRows}
+        rowKey={(row) => row.id}
+        page={page}
+        onPageChange={setPage}
+        sortKey={sortKey}
+        sortDirection={sortDirection}
+        onSort={toggleSort}
+        defaultPageSize={20}
+        pageSizeOptions={[10, 20, 50, 100]}
+        tableClassName="product-catalog-table"
+        emptyState={<p className="empty-state">尚無符合條件的商品資料。請調整篩選，或使用「新增商品」建立第一筆資料。</p>}
+        columns={[
+          { id: "item-code", label: "品號", sortKey: "item_code", locked: true, render: (row) => <strong>{row.item_code || "—"}</strong> },
+          { id: "item-name", label: "品名", sortKey: "item_name", render: (row) => row.item_name || "—" },
+          { id: "category", label: "分類", sortKey: "category", render: (row) => row.category || "未分類" },
+          { id: "specification", label: "規格／季別", render: (row) => [row.size, row.season].filter(Boolean).join("／") || "—" },
+          { id: "unit", label: "單位", render: (row) => row.unit || "—" },
+          { id: "supplier", label: "供應商／MOQ", sortKey: "supplier", className: "product-supplier-cell", render: (row) => row.supplierSummary.length > 0 ? row.supplierSummary.join("；") : <span className="muted">尚未建立供應關係</span> },
+          { id: "status", label: "狀態", render: (row) => <span className={`status-pill ${row.is_active ? "success" : ""}`}>{row.is_active ? "啟用" : "停用"}</span> },
+          { id: "actions", label: "功能", locked: true, render: (row) => <div className="product-table-actions"><button className="product-row-action" type="button" onClick={() => onEditItem(row)}>編輯</button><button className="product-row-action danger" type="button" onClick={() => onDeactivateItem(row)} disabled={!row.is_active}>{row.is_active ? "停用" : "已停用"}</button></div> },
+        ]}
+      />
     </section>
   );
 }
