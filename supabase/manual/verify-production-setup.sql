@@ -93,7 +93,10 @@ order by b.db_role;
 
 select
   (select count(*) from public.app_accounts where is_active) as active_accounts,
-  (select count(*) from public.user_roles where is_active) as active_role_assignments,
+  (select count(*)
+   from public.user_roles r
+   join public.app_accounts a on a.id = r.account_id
+   where a.is_active) as active_role_assignments,
   (select count(*) from public.institutions where is_active) as active_institutions,
   (select count(*) from public.departments where is_active) as active_departments,
   (select count(*) from public.employees where employment_status = 'ACTIVE') as active_employees,
