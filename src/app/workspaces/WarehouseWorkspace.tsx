@@ -1,4 +1,5 @@
 import InventoryManagementPanel from "../InventoryManagementPanel";
+import ModuleWorkbench from "../ModuleWorkbench";
 import StocktakeCorrectionPanel from "../StocktakeCorrectionPanel";
 import StocktakePanel from "../StocktakePanel";
 import WarehouseShipmentPanel from "../WarehouseShipmentPanel";
@@ -11,14 +12,7 @@ export default function WarehouseWorkspace({ activeModule, onNavigate }: Props) 
   return (
     <div className="workspace-sections">
       <section className="workspace-section" id="workspace-module-panel-warehouse-inventory-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-inventory-title" hidden={activeModule !== "warehouse-inventory-title"}>
-        <div className="workspace-section-heading">
-          <div>
-            <p className="eyebrow">INVENTORY MANAGEMENT</p>
-            <h2 id="warehouse-inventory-title">庫存管理</h2>
-          </div>
-          <p>集中檢視、匯出與啟動兩倉庫存作業；正式數量只能由期初、入庫、發貨、盤點、退回或更正流水更新。</p>
-        </div>
-        <InventoryManagementPanel onNavigate={onNavigate} />
+        <InventoryManagementPanel headingId="warehouse-inventory-title" onNavigate={onNavigate} />
       </section>
 
       <section className="workspace-section" id="workspace-module-panel-warehouse-control-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-control-title" hidden={activeModule !== "warehouse-control-title"}>
@@ -33,18 +27,18 @@ export default function WarehouseWorkspace({ activeModule, onNavigate }: Props) 
       </section>
 
       <section className="workspace-section" id="workspace-module-panel-warehouse-stocktake-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-stocktake-title" hidden={activeModule !== "warehouse-stocktake-title"}>
-        <div className="workspace-section-heading">
-          <div>
-            <p className="eyebrow">STOCKTAKE &amp; CORRECTION</p>
-            <h2 id="warehouse-stocktake-title">盤點與倉庫更正</h2>
-          </div>
-          <p>盤點依帳面版本進行 fencing，所有正式更正都保留來源與理由。</p>
-        </div>
-        <div className="workspace-panel-grid workspace-panel-grid--balanced">
-          <StocktakePanel />
-          <WarehouseTransferCorrectionPanel />
-        </div>
-        <StocktakeCorrectionPanel />
+        <ModuleWorkbench
+          idPrefix="warehouse-stocktake"
+          eyebrow="STOCKTAKE & CORRECTION"
+          title="盤點與倉庫更正"
+          headingId="warehouse-stocktake-title"
+          description="先依任務選擇正式盤點、調庫更正或盤點更正；每條流程都保留原始來源、理由與版本 fencing。"
+          tabs={[
+            { id: "stocktake", label: "庫存盤點", content: <StocktakePanel /> },
+            { id: "transfer-correction", label: "調庫更正", content: <WarehouseTransferCorrectionPanel /> },
+            { id: "stocktake-correction", label: "盤點更正", content: <StocktakeCorrectionPanel /> },
+          ]}
+        />
       </section>
     </div>
   );

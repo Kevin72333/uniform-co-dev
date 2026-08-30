@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 import { validateAccountCreation } from "@/src/lib/account-admin-form";
+import { ModuleWorkbenchNavigation } from "./ModuleWorkbench";
 
 type Account = { id: string; auth_user_id: string | null; login_name: string | null; display_name: string; email_snapshot: string | null; is_active: boolean };
 type Role = "SYSTEM_ADMIN" | "HR" | "WAREHOUSE" | "PROCUREMENT" | "CEO" | "DEMAND_COORDINATOR";
@@ -12,10 +13,13 @@ type Department = { id: string; institution_id: string; code: string; name: stri
 type ScopeRow = { account_id: string; institution_id: string; department_id: string };
 type OperationPayload = Record<string, unknown>;
 type OperationResult = { ok: boolean; account?: Account; warning?: string; error?: string };
+type AccountAdminTab = "directory" | "create" | "manage";
 
 const roles: Role[] = ["SYSTEM_ADMIN", "HR", "WAREHOUSE", "PROCUREMENT", "CEO", "DEMAND_COORDINATOR"];
 
-export default function AccountAdminPanel() {
+type Props = { headingId?: string };
+
+export default function AccountAdminPanel({ headingId }: Props) {
   const client = getSupabaseBrowserClient();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [roleRows, setRoleRows] = useState<RoleRow[]>([]);
@@ -43,12 +47,25 @@ export default function AccountAdminPanel() {
   const [message, setMessage] = useState("");
   const [messageKind, setMessageKind] = useState<"success" | "error">("success");
   const [busy, setBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<AccountAdminTab>("directory");
+  const [accountQuery, setAccountQuery] = useState("");
+  const [accountStatus, setAccountStatus] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
   const operationRefs = useRef<Record<string, string>>({});
 
   const selected = accounts.find((account) => account.id === selectedId) ?? null;
   const selectedRoles = useMemo(() => roleRows.filter((row) => row.account_id === selectedId).map((row) => row.role_code), [roleRows, selectedId]);
   const selectedScopes = useMemo(() => scopeRows.filter((row) => row.account_id === selectedId), [scopeRows, selectedId]);
   const filteredDepartments = departments.filter((department) => department.institution_id === institutionId);
+  const filteredAccounts = useMemo(() => {
+    const query = accountQuery.trim().toLocaleLowerCase();
+    return accounts.filter((account) => {
+      if (accountStatus === "ACTIVE" && !account.is_active) return false;
+      if (accountStatus === "INACTIVE" && account.is_active) return false;
+      if (!query) return true;
+      return `${account.login_name ?? ""} ${account.display_name} ${account.email_snapshot ?? ""}`.toLocaleLowerCase().includes(query);
+    });
+  }, [accountQuery, accountStatus, accounts]);
 
   const fetchData = useCallback(async () => {
     if (!client) return null;
@@ -91,6 +108,12 @@ export default function AccountAdminPanel() {
     }
   }
 
+  async function refreshAccounts() {
+    setBusy(true);
+    await load();
+    setBusy(false);
+  }
+
   useEffect(() => {
     if (!client) return;
     let active = true;
@@ -118,6 +141,8 @@ export default function AccountAdminPanel() {
     setEditDisplayName(account.display_name);
     setEditEmail(account.email_snapshot ?? "");
     setEditRoleCodes(roleRows.filter((row) => row.account_id === account.id).map((row) => row.role_code));
+    setDeleteConfirming(false);
+    setActiveTab("manage");
     resetOperation("profile");
     resetOperation("password");
     resetOperation("roles");
@@ -234,9 +259,11 @@ export default function AccountAdminPanel() {
 
   async function deleteAccount() {
     if (!selectedId || !reason.trim()) { setMessageKind("error"); setMessage("請選擇帳號並填寫操作理由。"); return; }
-    if (!window.confirm(`確定要停用「${selected?.display_name ?? "此帳號"}」並刪除其登入身份嗎？業務歷史資料會保留。`)) return;
     setBusy(true); setMessage("");
-    try { await runOperation({ operation: "delete", account_id: selectedId, reason: reason.trim() }, "delete"); }
+    try {
+      await runOperation({ operation: "delete", account_id: selectedId, reason: reason.trim() }, "delete");
+      setDeleteConfirming(false);
+    }
     catch (error) { setMessageKind("error"); setMessage(error instanceof Error ? error.message : "帳號刪除失敗。"); }
     finally { setBusy(false); }
   }
@@ -251,20 +278,48 @@ export default function AccountAdminPanel() {
   }
 
   if (!client) return null;
-  return <section className="panel import-panel" aria-label="帳號角色與需求窗口管理">
-    <div className="panel-heading"><div><p className="eyebrow">01 / ADMIN</p><h2>帳號、六角色與窗口範圍</h2></div><span className="status-pill">SYSTEM_ADMIN</span></div>
-    <p className="auth-message">登入帳號與密碼為必填，Email 只作為選填的聯絡資料。建立帳號時可同時勾選多個角色；密碼只送往 server-side Auth Admin，不會寫入業務資料表。</p>
+  return <div className="workspace-sections account-admin-workbench">
+    <section className="panel module-workbench-header" aria-label="帳號管理工具列">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">ACCOUNT ADMINISTRATION</p>
+          <h2 id={headingId}>帳號與權限管理</h2>
+          <p className="auth-message">先從帳號清單選擇管理對象，或切換到新增帳號；基本資料、密碼、角色、Auth 綁定與窗口範圍集中在帳號設定。</p>
+        </div>
+        <div className="module-workbench-actions">
+          <button className="primary-button" type="button" onClick={() => setActiveTab("create")}>＋ 新增帳號</button>
+          <button className="secondary-button" type="button" onClick={() => void refreshAccounts()} disabled={busy}>{busy ? "讀取中…" : "重新整理"}</button>
+        </div>
+      </div>
+      <ModuleWorkbenchNavigation
+        idPrefix="account-admin"
+        ariaLabel="帳號管理功能"
+        activeTabId={activeTab}
+        onTabChange={(tabId) => setActiveTab(tabId as AccountAdminTab)}
+        tabs={[
+          { id: "directory", label: "帳號清單", badge: String(accounts.length) },
+          { id: "create", label: "新增帳號" },
+          { id: "manage", label: "帳號設定", badge: selected ? selected.login_name ?? selected.display_name : undefined },
+        ]}
+      />
+    </section>
     {message ? <p className={messageKind === "success" ? "success-note account-admin-feedback" : "error-box account-admin-feedback"} role="status" aria-live="polite">{message}</p> : null}
-    <div className="increase-list account-directory">
+    <section className="panel import-panel account-admin-content" aria-label="帳號角色與需求窗口管理">
+    <div id="account-admin-panel-directory" className="increase-list account-directory" role="tabpanel" aria-labelledby="account-admin-tab-directory" hidden={activeTab !== "directory"}>
       <div className="subheading"><h3>現有業務帳號</h3><span>已載入 {accounts.length} 筆</span></div>
       <p className="muted">這裡列出已建立 `app_accounts` 並受角色／RLS 管理的正式帳號；只存在 Supabase Authentication、尚未建立業務帳號的登入身份不會出現在此清單。</p>
+      <div className="account-directory-filters">
+        <label className="field"><span>搜尋帳號</span><input value={accountQuery} onChange={(event) => setAccountQuery(event.target.value)} placeholder="登入帳號、名稱或聯絡 Email…" /></label>
+        <label className="field"><span>帳號狀態</span><select value={accountStatus} onChange={(event) => setAccountStatus(event.target.value as typeof accountStatus)}><option value="ALL">全部狀態</option><option value="ACTIVE">啟用</option><option value="INACTIVE">停用</option></select></label>
+      </div>
       <div className="summary-list account-directory-list">
-        {accounts.length === 0 ? <p className="empty-state">目前沒有可管理的業務帳號，或目前登入者沒有 SYSTEM_ADMIN 讀取權限。</p> : null}
-        {accounts.map((account) => <button className={`admin-account-row ${account.id === selectedId ? "selected" : ""}`} type="button" key={account.id} onClick={() => selectAccount(account)}>
+        {filteredAccounts.length === 0 ? <p className="empty-state">目前沒有符合條件的業務帳號，或目前登入者沒有 SYSTEM_ADMIN 讀取權限。</p> : null}
+        {filteredAccounts.map((account) => <button className={`admin-account-row ${account.id === selectedId ? "selected" : ""}`} type="button" key={account.id} onClick={() => selectAccount(account)}>
           <span><strong>{account.display_name}</strong><small>帳號：{account.login_name ?? "舊版 Email 登入"}／{account.email_snapshot ?? "未填聯絡 Email"}／{account.is_active ? "啟用" : "停用"}／{account.auth_user_id ? "已綁定登入" : "未綁定登入"}</small></span><span className="status-pill">{selectedId === account.id ? "已選" : "管理"}</span>
         </button>)}
       </div>
     </div>
+    <div id="account-admin-panel-create" role="tabpanel" aria-labelledby="account-admin-tab-create" hidden={activeTab !== "create"}>
     <div className="subheading account-create-heading"><h3>新增帳號</h3><span>帳號、密碼、角色與理由完成後送出</span></div>
     <div className="form-grid">
       <label className="field"><span>登入帳號（2–50 個小寫英數字）</span><input autoComplete="username" value={loginName} onChange={(event) => { resetOperation("create"); setLoginName(event.target.value); }} disabled={busy} placeholder="例如 hr01" /></label>
@@ -280,6 +335,9 @@ export default function AccountAdminPanel() {
       </div>
     </fieldset>
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void createAccount()} disabled={busy}>{busy ? "處理中…" : "建立帳號、登入身份與權限"}</button></div>
+    </div>
+    <div id="account-admin-panel-manage" role="tabpanel" aria-labelledby="account-admin-tab-manage" hidden={activeTab !== "manage"}>
+    {!selected ? <p className="empty-state">請先從「帳號清單」選擇要管理的帳號。</p> : null}
     {selected ? <>
       <div className="increase-list">
         <div className="subheading"><h3>帳號資料</h3><span>{selected.auth_user_id ? "登入身份由 server-side Auth Admin 同步" : "尚未綁定登入身份"}</span></div>
@@ -314,8 +372,11 @@ export default function AccountAdminPanel() {
         <label className="field"><span>綁定動作</span><select value={unbindAuth ? "UNBIND" : "REBIND"} onChange={(event) => { resetOperation("rebind"); setUnbindAuth(event.target.value === "UNBIND"); }} disabled={busy}><option value="REBIND">重設到新的 Auth user</option><option value="UNBIND">解除 Auth 綁定</option></select></label>
       </div>
       <p className="muted">目前角色：{selectedRoles.length > 0 ? selectedRoles.join("、") : "尚未指派"}／目前需求窗口範圍：{selectedScopes.length} 筆</p>
-      <div className="button-row"><button className="secondary-button" type="button" onClick={() => void setStatus()} disabled={busy || !reason.trim()}>{selected.is_active ? "停用登入與帳號" : "重新啟用帳號"}</button><button className="secondary-button" type="button" onClick={() => void rebindAuth()} disabled={busy || !reason.trim() || (!unbindAuth && !newAuthUserId.trim())}>{unbindAuth ? "解除 Auth 綁定" : "重設 Auth 綁定"}</button><button className="secondary-button" type="button" onClick={() => void deleteAccount()} disabled={busy || !reason.trim()}>刪除登入身份</button></div>
+      <div className="button-row"><button className="secondary-button" type="button" onClick={() => void setStatus()} disabled={busy || !reason.trim()}>{selected.is_active ? "停用登入與帳號" : "重新啟用帳號"}</button><button className="secondary-button" type="button" onClick={() => void rebindAuth()} disabled={busy || !reason.trim() || (!unbindAuth && !newAuthUserId.trim())}>{unbindAuth ? "解除 Auth 綁定" : "重設 Auth 綁定"}</button><button className="secondary-button" type="button" onClick={() => setDeleteConfirming(true)} disabled={busy || !reason.trim()}>刪除登入身份</button></div>
+      {deleteConfirming ? <div className="product-deactivate-warning account-delete-confirmation"><strong>確認刪除「{selected.display_name}」的登入身份？</strong><span>業務歷史會保留，但帳號將停用且 Auth 登入身份會被刪除。此操作必須有上方填寫的理由。</span><div className="button-row"><button className="danger-button" type="button" onClick={() => void deleteAccount()} disabled={busy}>{busy ? "刪除中…" : "確認刪除登入身份"}</button><button className="secondary-button" type="button" onClick={() => setDeleteConfirming(false)} disabled={busy}>取消</button></div></div> : null}
       <div className="increase-list"><div className="subheading"><h3>需求窗口範圍</h3><span>只有 DEMAND_COORDINATOR 可設定範圍</span></div><div className="form-grid"><label className="field"><span>機構</span><select value={institutionId} onChange={(event) => { resetOperation("scope"); setInstitutionId(event.target.value); setDepartmentId(""); }} disabled={busy}><option value="">選擇機構</option>{institutions.map((institution) => <option key={institution.id} value={institution.id}>{institution.code}｜{institution.name}</option>)}</select></label><label className="field"><span>部門</span><select value={departmentId} onChange={(event) => { resetOperation("scope"); setDepartmentId(event.target.value); }} disabled={busy || !institutionId}><option value="">選擇部門</option>{filteredDepartments.map((department) => <option key={department.id} value={department.id}>{department.code}｜{department.name}</option>)}</select></label><label className="field"><span>範圍狀態</span><select value={scopeEnabled ? "ON" : "OFF"} onChange={(event) => { resetOperation("scope"); setScopeEnabled(event.target.value === "ON"); }} disabled={busy}><option value="ON">授權</option><option value="OFF">撤銷</option></select></label></div><div className="button-row"><button className="secondary-button" type="button" onClick={() => void setScope()} disabled={busy || !institutionId || !departmentId}>{scopeEnabled ? "授權窗口範圍" : "撤銷窗口範圍"}</button></div></div>
     </> : null}
-  </section>;
+    </div>
+  </section>
+  </div>;
 }

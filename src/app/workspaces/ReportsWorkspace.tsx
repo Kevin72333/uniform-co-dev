@@ -1,4 +1,5 @@
 import ErpExportPanel from "../ErpExportPanel";
+import ModuleWorkbench from "../ModuleWorkbench";
 import PdfArtifactPanel from "../PdfArtifactPanel";
 import ReportingPanel from "../ReportingPanel";
 
@@ -19,17 +20,17 @@ export default function ReportsWorkspace({ activeModule }: Props) {
       </section>
 
       <section className="workspace-section" id="workspace-module-panel-reports-artifact-title" role="tabpanel" aria-labelledby="workspace-module-tab-reports-artifact-title" hidden={activeModule !== "reports-artifact-title"}>
-        <div className="workspace-section-heading">
-          <div>
-            <p className="eyebrow">FORMAL ARTIFACTS</p>
-            <h2 id="reports-artifact-title">正式文件與 ERP</h2>
-          </div>
-          <p>只有在正式來源 snapshot 與授權角色符合時，才可請求 artifact 或 ERP 批次。</p>
-        </div>
-        <div className="workspace-panel-grid workspace-panel-grid--balanced">
-          <PdfArtifactPanel />
-          <ErpExportPanel />
-        </div>
+        <ModuleWorkbench
+          idPrefix="formal-artifacts"
+          eyebrow="FORMAL ARTIFACTS"
+          title="正式文件與 ERP"
+          headingId="reports-artifact-title"
+          description="PDF 與 ERP 是不同 artifact 流程；只有正式來源 snapshot 與授權角色符合時才可提出請求。"
+          tabs={[
+            { id: "pdf", label: "正式 PDF", content: <PdfArtifactPanel /> },
+            { id: "erp", label: "鼎新 ERP", content: <ErpExportPanel /> },
+          ]}
+        />
       </section>
     </div>
   );

@@ -32,7 +32,8 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - Production release 已集中到 17 個 gate 的 `npm run deployment:release-gate`；正式 evidence 使用 ignored 的 `docs/deployment/onboarding/private/release-evidence.json`，由 `npm run deployment:release-evidence` 初始化／record／block。版本化 template 永遠是 `NOT_READY`，repository-local 測試成功不能自動轉成 production evidence。
 - 商品管理採獨立清單、商品表單、供應商／MOQ 與匯入／匯出頁籤：清單支援分類、搜尋、狀態、排序、分頁及逐列編輯／停用；新增與修改走單列 `apply_master_import`，刪除採停用以保留交易歷史。`0077_uniform_item_manager_read_inactive.sql` 套用後，HR 可在清單檢視停用品號並重新啟用。
 - 庫存管理已集中為兩倉可用量、期初庫存耐久匯入、發貨／盤點／採購入庫／更正操作入口、庫存／流水 CSV 匯出與本機規則試算；`0076_inventory_report_export_audit.sql` 只記錄匯出 metadata，庫存數字仍由流水與 view 推導。
-- 最新完整本機驗證：56 個 test files、226/226 tests 全數通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 無內容錯誤，僅有既存 LF→CRLF 提示。
+- `ModuleWorkbench` 已成為正式 UI 的子功能 seam：商品、帳號、庫存、人資需求／更正、倉庫盤點、採購決策／入庫、換季活動與正式文件都使用一致的工具列與任務頁籤；切換時保留未送出的 panel 狀態。完整盤點與不拆分理由見 [`docs/architecture/module-workbench.md`](./docs/architecture/module-workbench.md)。
+- 最新完整本機驗證：57 個 test files、230/230 tests 全數通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 無內容錯誤，僅有既存 LF→CRLF 提示。
 
 目前正式狀態仍是 **`NOT_READY`**。剩餘項目需要真實外部證據：第一批正式帳號／角色／需求窗口範圍、GitHub／Vercel owner 與 backup owner 移交、鼎新正式 mapping 與成功匯入樣本、正式 PDF 版面核准、Supabase migration／RLS／Auth／Storage／signed URL／並行 smoke、durable import worker 與 renderer 真實 staging integration、Storage destructive cleanup、DB 90-day retention destructive smoke、外部 error monitoring、production-sized DB＋Auth＋Storage 從零還原、RPO／RTO 實測、三年容量實測，以及最後 production cutover approval。
 
