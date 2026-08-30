@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { parseEmployeeCsv, type EmployeeImportResult } from "@/src/domain/employee-import";
+import { masterRowsToCsv } from "@/src/domain/master-data";
+import { sampleEmployeeRows } from "@/src/domain/master-data-samples";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
 export default function EmployeeImportPanel() {
@@ -11,6 +13,8 @@ export default function EmployeeImportPanel() {
   const [backendErrors, setBackendErrors] = useState<Array<{ row_number: number; error_code: string | null; error_message: string | null }>>([]);
   const [busy, setBusy] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [sampleMode, setSampleMode] = useState(false);
+  const [sampleConfirmed, setSampleConfirmed] = useState(false);
   const [hasOperation, setHasOperation] = useState(false);
   const [existingEmployees, setExistingEmployees] = useState<Map<string, { name: string; institutionCode: string; departmentCode: string; employmentStatus: string }>>(new Map());
   const operationRef = useRef<{ key: string; fingerprint: string } | null>(null);
@@ -41,27 +45,51 @@ export default function EmployeeImportPanel() {
     return () => { active = false; };
   }, []);
 
-  async function handleFile(file: File | undefined) {
-    if (!file) {
-      return;
-    }
-    if (file.size > 10_000_000) {
-      setResult({ headers: [], rows: [], errors: [{ row: 1, code: "INVALID_COLUMN_COUNT", message: "檔案超過 10 MB 上限" }] });
-      setMessage("");
-      return;
-    }
-    setFileName(file.name);
+  function previewText(sourceName: string, text: string, isSample = false) {
+    setFileName(sourceName);
     setApplied(false);
     setMessage("");
     setBackendErrors([]);
     operationRef.current = null;
     setHasOperation(false);
-    setResult(parseEmployeeCsv(await file.text()));
+    setSampleMode(isSample);
+    setSampleConfirmed(false);
+    setResult(parseEmployeeCsv(text));
+  }
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 10_000_000) {
+      setResult({ headers: [], rows: [], errors: [{ row: 1, code: "INVALID_COLUMN_COUNT", message: "檔案超過 10 MB 上限" }] });
+      setMessage("");
+      return;
+    }
+    previewText(file.name, await file.text());
+  }
+
+  function loadSamplePreview() {
+    previewText("sample-employees.csv", masterRowsToCsv(sampleEmployeeRows), true);
+    setMessage(`已載入 ${sampleEmployeeRows.length} 列測試範例；請只在 disposable staging 使用`);
+  }
+
+  function downloadSample() {
+    const blob = new Blob([masterRowsToCsv(sampleEmployeeRows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "sample-employees.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage("測試員工 CSV 已下載；請只在 disposable staging 使用");
   }
 
   async function applyImport() {
     const client = getSupabaseBrowserClient();
     if (!result || result.errors.length > 0 || result.rows.length === 0) return;
+    if (sampleMode && !sampleConfirmed) {
+      setMessage("套用測試範例前，請先確認目前是 disposable staging 環境");
+      return;
+    }
     if (!client) {
       setMessage("預覽模式：設定 Supabase env 並登入 HR 帳號後才能原子套用。");
       return;
@@ -123,6 +151,11 @@ export default function EmployeeImportPanel() {
           onChange={(event) => void handleFile(event.target.files?.[0])}
         />
       </label>
+      <div className="button-row">
+        <button className="secondary-button" type="button" disabled={busy} onClick={loadSamplePreview}>載入範例到預覽</button>
+        <button className="secondary-button" type="button" disabled={busy} onClick={downloadSample}>下載範例 CSV</button>
+      </div>
+      {sampleMode ? <label className="checkbox-field"><input type="checkbox" checked={sampleConfirmed} onChange={(event) => setSampleConfirmed(event.target.checked)} disabled={busy} />我確認這是 DEMO 測試資料，且目前連線的是 disposable staging</label> : null}
       {fileName ? <p className="file-name">{fileName}</p> : null}
       {result ? (
         <div className="import-result">
@@ -142,7 +175,7 @@ export default function EmployeeImportPanel() {
           ) : (
             <>
               <p className="success-note">預覽通過；確認後會保留原始檔名、逐列結果與套用批次。</p>
-              <button className="primary-button" type="button" onClick={() => void applyImport()} disabled={busy || applied}>{busy ? "套用中…" : applied ? "已套用" : hasOperation ? "重試套用（沿用冪等鍵）" : "確認並套用整批"}</button>
+              <button className="primary-button" type="button" onClick={() => void applyImport()} disabled={busy || applied || (sampleMode && !sampleConfirmed)}>{busy ? "套用中…" : applied ? "已套用" : hasOperation ? "重試套用（沿用冪等鍵）" : "確認並套用整批"}</button>
             </>
           )}
           {backendErrors.length > 0 ? <ul className="import-errors">{backendErrors.map((error) => <li key={`${error.row_number}-${error.error_code}`}>第 {error.row_number} 列：{error.error_message ?? error.error_code ?? "資料錯誤"}</li>)}</ul> : null}

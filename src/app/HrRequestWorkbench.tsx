@@ -17,7 +17,7 @@ type LineState = {
   quantity: number;
 };
 
-const employees: EmployeeSnapshot[] = [
+const previewEmployees: EmployeeSnapshot[] = [
   {
     employeeId: "employee-1",
     employeeNo: "E001",
@@ -38,7 +38,7 @@ const employees: EmployeeSnapshot[] = [
   },
 ];
 
-const items: UniformItemSnapshot[] = [
+const previewItems: UniformItemSnapshot[] = [
   {
     itemId: "item-m",
     itemCode: "U-M",
@@ -61,7 +61,7 @@ const items: UniformItemSnapshot[] = [
   },
 ];
 
-const initialLines: LineState[] = [
+const previewLines: LineState[] = [
   { lineId: "line-1", employeeId: "employee-1", itemId: "item-m", quantity: 10 },
 ];
 
@@ -71,18 +71,18 @@ function taipeiToday(): string {
 
 export default function HrRequestWorkbench() {
   const client = getSupabaseBrowserClient();
-  const [employeeOptions, setEmployeeOptions] = useState<EmployeeSnapshot[]>(employees);
-  const [itemOptions, setItemOptions] = useState<UniformItemSnapshot[]>(items);
-  const [lines, setLines] = useState<LineState[]>(initialLines);
+  const previewMode = !client;
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeSnapshot[]>(previewMode ? previewEmployees : []);
+  const [itemOptions, setItemOptions] = useState<UniformItemSnapshot[]>(previewMode ? previewItems : []);
+  const [lines, setLines] = useState<LineState[]>(previewMode ? previewLines : []);
   const [distributionDate, setDistributionDate] = useState(taipeiToday());
-  const [increases, setIncreases] = useState<Record<string, number>>({
-    "item-m": 0,
-    "item-l": 0,
-  });
+  const [increases, setIncreases] = useState<Record<string, number>>(
+    previewMode ? { "item-m": 0, "item-l": 0 } : {},
+  );
   const [dataMessage, setDataMessage] = useState("");
   const [submitMessage, setSubmitMessage] = useState("");
   const [loadingData, setLoadingData] = useState(false);
-  const [dataReady, setDataReady] = useState(!client);
+  const [dataReady, setDataReady] = useState(previewMode);
   const [submitting, setSubmitting] = useState(false);
   const [submittedRequestId, setSubmittedRequestId] = useState("");
   const [hasDraftOperation, setHasDraftOperation] = useState(false);
@@ -105,7 +105,11 @@ export default function HrRequestWorkbench() {
       ]);
       if (!active) return;
       if (employeeResult.error || institutionResult.error || departmentResult.error || itemResult.error || warehouseResult.error || balanceResult.error || reservationResult.error) {
-        setDataMessage("正式主檔載入失敗，暫以測試資料預覽；請確認角色與 RLS 權限。");
+        setEmployeeOptions([]);
+        setItemOptions([]);
+        setLines([]);
+        setIncreases({});
+        setDataMessage("正式主檔載入失敗，已停用需求建立；請確認 HR 角色與 RLS 權限。");
         setDataReady(false);
         setLoadingData(false);
         return;
@@ -150,6 +154,10 @@ export default function HrRequestWorkbench() {
         setDataMessage(`已載入 ${employeeRows.length} 位在職員工、${itemRows.length} 個啟用品號`);
         setDataReady(true);
       } else {
+        setEmployeeOptions([]);
+        setItemOptions([]);
+        setLines([]);
+        setIncreases({});
         setDataMessage("正式主檔沒有可用的在職員工或制服品號。");
         setDataReady(false);
       }
@@ -211,6 +219,10 @@ export default function HrRequestWorkbench() {
   async function submitRequest() {
     if (!client) {
       setSubmitMessage("預覽模式：設定 Supabase env 並登入 HR 帳號後才能建立草稿與送出預留。");
+      return;
+    }
+    if (!dataReady) {
+      setSubmitMessage(dataMessage || "正式主檔尚未載入，暫時不能建立需求。");
       return;
     }
     if (!distributionDate) {
@@ -420,7 +432,9 @@ export default function HrRequestWorkbench() {
               ))}
             </div>
             <p className="success-note">
-              這是測試資料的送出前預覽；正式送單仍須透過 Supabase `submit_hr_request` RPC，再次鎖定品號、重算兩倉合計並建立預留。
+              {previewMode
+                ? "這是本機測試資料的送出前預覽；設定 Supabase env 並登入後才可建立正式需求。"
+                : "正式送單會透過 Supabase `submit_hr_request` RPC，再次鎖定品號、重算兩倉合計並建立預留。"}
             </p>
           </>
         )}

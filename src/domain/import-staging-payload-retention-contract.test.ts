@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const migration = readFileSync(
   join(process.cwd(), "supabase", "migrations", "0074_import_staging_payload_retention.sql"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 const candidateSql = migration.split(
   "create or replace function public.list_import_staging_retention_candidates",
 )[1]?.split("create or replace function public.purge_import_staging_payload")[0] ?? "";

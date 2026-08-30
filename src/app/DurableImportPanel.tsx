@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { durableImportFingerprintPayload, durableImportLabels, durableImportMappingVersion, durableImportMimeForFilename, durableImportTypes, type DurableImportType } from "@/src/domain/durable-import";
+import { getSampleDurableRows } from "@/src/domain/master-data-samples";
+import { masterRowsToCsv } from "@/src/domain/master-data";
 import { canonicalFingerprint } from "@/src/lib/fingerprint";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
@@ -67,6 +69,8 @@ export default function DurableImportPanel() {
   const [batch, setBatch] = useState<ImportBatch | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [sampleMode, setSampleMode] = useState(false);
+  const [sampleConfirmed, setSampleConfirmed] = useState(false);
   const [cancelReason, setCancelReason] = useState("使用者取消未完成匯入");
   const [differencesReviewed, setDifferencesReviewed] = useState(false);
   const [rows, setRows] = useState<ImportRow[]>([]);
@@ -159,7 +163,7 @@ export default function DurableImportPanel() {
     return () => window.clearInterval(timer);
   }, [batch, client, refreshBatch]);
 
-  function resetForNewFile(nextFile: File | null) {
+  function resetForNewFile(nextFile: File | null, isSample = false) {
     operationRef.current = null;
     cancelOperationRef.current = null;
     confirmOperationRef.current = null;
@@ -169,16 +173,20 @@ export default function DurableImportPanel() {
     setBatch(null);
     setFile(nextFile);
     setMessage("");
+    setSampleMode(isSample);
+    setSampleConfirmed(false);
     if (!nextFile && typeof window !== "undefined") {
       recoveryRef.current = null;
       window.localStorage.removeItem(recoveryStorageKey);
     }
   }
 
-  function selectFile(nextFile: File | null) {
+  function selectFile(nextFile: File | null, isSample = false) {
     const saved = recoveryRef.current;
     if (nextFile && saved && saved.fileName === nextFile.name && saved.sizeBytes === nextFile.size) {
       setFile(nextFile);
+      setSampleMode(false);
+      setSampleConfirmed(false);
       setImportType(saved.importType);
       operationRef.current = saved.operationKey;
       cancelOperationRef.current = saved.cancelKey;
@@ -186,7 +194,7 @@ export default function DurableImportPanel() {
       setMessage("已恢復同一檔案的匯入操作；重試會沿用原冪等鍵。");
       return;
     }
-    resetForNewFile(nextFile);
+    resetForNewFile(nextFile, isSample);
   }
 
   function startNewBatch() {
@@ -195,9 +203,36 @@ export default function DurableImportPanel() {
     setCancelReason("使用者取消未完成匯入");
   }
 
+  function loadSampleFile() {
+    const sampleRows = getSampleDurableRows(importType);
+    const sampleFile = new File(
+      [masterRowsToCsv(sampleRows)],
+      `sample-${importType.toLowerCase()}.csv`,
+      { type: "text/csv" },
+    );
+    selectFile(sampleFile, true);
+    setMessage(`已載入 ${sampleRows.length} 列測試範例；請只在 disposable staging 使用`);
+  }
+
+  function downloadSampleFile() {
+    const sampleRows = getSampleDurableRows(importType);
+    const blob = new Blob([masterRowsToCsv(sampleRows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `sample-${importType.toLowerCase()}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage("測試範例 CSV 已下載；請只在 disposable staging 使用");
+  }
+
   async function startUpload() {
     if (!client || !file) {
       setMessage(client ? "請先選擇 CSV 或 XLSX 檔案。" : "預覽模式：設定 Supabase env 並登入後才能建立 durable batch。");
+      return;
+    }
+    if (sampleMode && !sampleConfirmed) {
+      setMessage("上傳測試範例前，請先確認目前是 disposable staging 環境");
       return;
     }
     const mimeType = durableImportMimeForFilename(file.name);
@@ -311,6 +346,8 @@ export default function DurableImportPanel() {
       <label className="field"><span>匯入類型</span><select value={importType} onChange={(event) => { resetForNewFile(null); setImportType(event.target.value as DurableImportType); }} disabled={busy || Boolean(batch)}>{durableImportTypes.map((type) => <option key={type} value={type}>{durableImportLabels[type]}</option>)}</select></label>
       <label className="file-picker"><span>選擇 CSV／XLSX</span><input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => selectFile(event.target.files?.[0] ?? null)} disabled={busy || Boolean(batch && batch.status !== "AWAITING_UPLOAD")} /></label>
     </div>
+    <div className="button-row"><button className="secondary-button" type="button" onClick={loadSampleFile} disabled={busy || Boolean(batch)}>載入範例檔案</button><button className="secondary-button" type="button" onClick={downloadSampleFile} disabled={busy || Boolean(batch)}>下載範例 CSV</button></div>
+    {sampleMode ? <label className="checkbox-field"><input type="checkbox" checked={sampleConfirmed} onChange={(event) => setSampleConfirmed(event.target.checked)} disabled={busy} />我確認這是 DEMO 測試資料，且目前連線的是 disposable staging</label> : null}
     {file ? <p className="file-name">{file.name}／{Math.ceil(file.size / 1024)} KB／{durableImportMimeForFilename(file.name)}</p> : null}
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void startUpload()} disabled={busy || !file || Boolean(batch && batch.status !== "AWAITING_UPLOAD")}>{busy ? "處理中…" : batch ? "重試目前批次" : "建立批次並直傳"}</button>{batch?.status === "VALIDATED" ? <button className="primary-button" type="button" onClick={() => void confirmBatch()} disabled={busy || rowsLoadedForBatch !== batch.id}>確認發布整批</button> : null}{canCancel ? <button className="secondary-button" type="button" onClick={() => void cancelBatch()} disabled={busy}>取消批次</button> : null}{batch && ["APPLIED", "FAILED", "CANCELLED"].includes(batch.status) ? <button className="secondary-button" type="button" onClick={startNewBatch} disabled={busy}>建立新批次</button> : null}</div>
     {canCancel ? <label className="field"><span>取消理由（必填）</span><input value={cancelReason} onChange={(event) => { cancelOperationRef.current = null; setCancelReason(event.target.value); }} disabled={busy} /></label> : null}

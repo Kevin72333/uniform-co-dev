@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 import { masterRowsToCsv, parseMasterDataCsv, parseMasterDataJson } from "@/src/domain/master-data";
+import { getSampleMasterRows, type SampleMasterEntity } from "@/src/domain/master-data-samples";
 
 const entityOptions = [
   ["INSTITUTIONS", "機構"],
@@ -16,12 +17,29 @@ export default function MasterDataPanel() {
   const [entityType, setEntityType] = useState<(typeof entityOptions)[number][0]>("INSTITUTIONS");
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<unknown[]>([]);
+  const [sampleMode, setSampleMode] = useState(false);
+  const [sampleConfirmed, setSampleConfirmed] = useState(false);
   const [message, setMessage] = useState("尚未載入檔案");
   const [busy, setBusy] = useState(false);
+
+  function resetPreview() {
+    setFileName("");
+    setRows([]);
+    setSampleMode(false);
+    setSampleConfirmed(false);
+    setMessage("尚未載入檔案");
+  }
+
+  function selectEntity(nextEntityType: typeof entityType) {
+    setEntityType(nextEntityType);
+    resetPreview();
+  }
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
     setFileName(file.name);
+    setSampleMode(false);
+    setSampleConfirmed(false);
     try {
       if (file.size > 10_000_000) throw new Error("檔案超過 10 MB 上限");
       const text = await file.text();
@@ -35,8 +53,33 @@ export default function MasterDataPanel() {
     }
   }
 
+  function loadSamplePreview() {
+    const sampleRows = getSampleMasterRows(entityType as SampleMasterEntity);
+    setFileName(`sample-${entityType.toLowerCase()}.csv`);
+    setRows(sampleRows);
+    setSampleMode(true);
+    setSampleConfirmed(false);
+    setMessage(`已載入 ${sampleRows.length} 列測試範例；請只在 disposable staging 使用`);
+  }
+
+  function downloadSample() {
+    const sampleRows = getSampleMasterRows(entityType as SampleMasterEntity);
+    const blob = new Blob([masterRowsToCsv(sampleRows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `sample-${entityType.toLowerCase()}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage("測試範例 CSV 已下載；請只在 disposable staging 使用");
+  }
+
   async function applyImport() {
     if (rows.length === 0) return;
+    if (sampleMode && !sampleConfirmed) {
+      setMessage("套用測試範例前，請先確認目前是 disposable staging 環境");
+      return;
+    }
     const client = getSupabaseBrowserClient();
     if (!client) {
       setMessage("預覽模式：設定 Supabase env 並登入後，才會呼叫整批驗證／原子 upsert RPC");
@@ -106,7 +149,7 @@ export default function MasterDataPanel() {
       <div className="form-grid master-tools">
         <label className="field">
           <span>主檔類型</span>
-          <select value={entityType} onChange={(event) => setEntityType(event.target.value as typeof entityType)}>
+          <select value={entityType} onChange={(event) => selectEntity(event.target.value as typeof entityType)} disabled={busy}>
             {entityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
@@ -117,7 +160,12 @@ export default function MasterDataPanel() {
       </div>
       {fileName ? <p className="file-name">{fileName}／{rows.length} 列</p> : null}
       <div className="button-row">
-        <button className="primary-button" type="button" disabled={busy || rows.length === 0} onClick={() => void applyImport()}>確認整批匯入</button>
+        <button className="secondary-button" type="button" disabled={busy} onClick={loadSamplePreview}>載入範例到預覽</button>
+        <button className="secondary-button" type="button" disabled={busy} onClick={downloadSample}>下載範例 CSV</button>
+      </div>
+      {sampleMode ? <label className="checkbox-field"><input type="checkbox" checked={sampleConfirmed} onChange={(event) => setSampleConfirmed(event.target.checked)} disabled={busy} />我確認這是 DEMO 測試資料，且目前連線的是 disposable staging</label> : null}
+      <div className="button-row">
+        <button className="primary-button" type="button" disabled={busy || rows.length === 0 || (sampleMode && !sampleConfirmed)} onClick={() => void applyImport()}>確認整批匯入</button>
         <button className="secondary-button" type="button" disabled={busy} onClick={() => void exportMasterData()}>匯出目前主檔</button>
       </div>
       <p className="success-note">{message}</p>
