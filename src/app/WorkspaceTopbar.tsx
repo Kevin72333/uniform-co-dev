@@ -25,6 +25,7 @@ type Props = {
   appearanceTheme: AppearanceTheme;
   onAppearanceChange: (theme: AppearanceTheme) => void;
   onNavigate: (workspaceId: WorkspaceId, anchor: string) => void;
+  onOpenSystemGuide?: () => void;
   onSignOut: () => Promise<void>;
 };
 
@@ -55,6 +56,10 @@ function BellIcon() {
 
 function HelpIcon() {
   return <span className="workspace-help-icon" aria-hidden="true">?</span>;
+}
+
+function GuideIcon() {
+  return <svg className="workspace-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z" /></svg>;
 }
 
 function AppearanceIcon() {
@@ -105,7 +110,7 @@ function SearchResults({ results, onSelect }: { results: WorkspaceSearchResult[]
   );
 }
 
-export default function WorkspaceTopbar({ activeDefinition, user, appearanceTheme, onAppearanceChange, onNavigate, onSignOut }: Props) {
+export default function WorkspaceTopbar({ activeDefinition, user, appearanceTheme, onAppearanceChange, onNavigate, onOpenSystemGuide, onSignOut }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -200,6 +205,7 @@ export default function WorkspaceTopbar({ activeDefinition, user, appearanceThem
         <button className="workspace-icon-button workspace-help-button" type="button" aria-label="快捷鍵說明" title="快捷鍵：輸入 / 可快速搜尋，Esc 關閉面板">
           <HelpIcon />
         </button>
+        {onOpenSystemGuide ? <button className="workspace-icon-button" type="button" aria-label="系統說明" title="開啟 SYSTEM_ADMIN 系統說明" onClick={onOpenSystemGuide}><GuideIcon /></button> : null}
         <AppearanceSelect theme={appearanceTheme} onChange={onAppearanceChange} />
         <span className="workspace-date-pill">正式資料工作區</span>
         <span className="status-pill">SUPABASE + RLS</span>

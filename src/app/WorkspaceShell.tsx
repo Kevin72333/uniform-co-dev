@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import AuthPanel from "./AuthPanel";
 import AuthSessionBoundary from "./AuthSessionBoundary";
 import RetainedPanelSet from "./RetainedPanelSet";
 import WorkspaceTopbar from "./WorkspaceTopbar";
 import { useAuthSession } from "./use-auth-session";
+import { useSystemGuideAccess } from "./use-system-guide-access";
 import AccountWorkspace from "./workspaces/AccountWorkspace";
 import HrWorkspace from "./workspaces/HrWorkspace";
 import OverviewWorkspace from "./workspaces/OverviewWorkspace";
@@ -39,6 +41,10 @@ function WorkspaceIcon({ name }: { name: (typeof workspaceDefinitions)[number]["
     return <svg {...common}><path d="M20 7v5h-5" /><path d="M4 17v-5h5" /><path d="M6.3 9A7 7 0 0 1 20 12M4 12a7 7 0 0 0 13.7 3" /></svg>;
   }
   return <svg {...common}><path d="M4 19V5M4 19h16" /><path d="m7 15 4-4 3 2 5-6" /></svg>;
+}
+
+function SystemGuideIcon() {
+  return <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z" /></svg>;
 }
 
 function workspaceFromUrl(): WorkspaceId {
@@ -75,7 +81,9 @@ function WorkspaceStage({ children, appearanceTheme }: { children: ReactNode; ap
 }
 
 export default function WorkspaceShell() {
+  const router = useRouter();
   const { client, user, loading } = useAuthSession();
+  const systemGuideAvailable = useSystemGuideAccess(client, user);
   const { theme: appearanceTheme, setTheme: setAppearanceTheme } = useAppearanceTheme();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("overview");
   const [activeModuleByWorkspace, setActiveModuleByWorkspace] = useState<Partial<Record<WorkspaceId, string>>>({});
@@ -159,6 +167,7 @@ export default function WorkspaceShell() {
               <span>{workspace.label}</span>
             </button>
           ))}
+          {systemGuideAvailable ? <button type="button" aria-label="開啟系統說明" onClick={() => router.push("/system-guide")}><span className="app-nav-icon"><SystemGuideIcon /></span><span>系統說明</span></button> : null}
         </nav>
 
         <div className="app-sidebar-bottom">
@@ -179,6 +188,7 @@ export default function WorkspaceShell() {
           appearanceTheme={appearanceTheme}
           onAppearanceChange={(theme: AppearanceTheme) => setAppearanceTheme(theme)}
           onNavigate={selectWorkspace}
+          onOpenSystemGuide={systemGuideAvailable ? () => router.push("/system-guide") : undefined}
           onSignOut={async () => {
             const { error } = await client.auth.signOut();
             if (error) throw error;
