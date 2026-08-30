@@ -235,7 +235,7 @@ export default function WorkspaceShell() {
               {workspace.id === "overview" ? <OverviewWorkspace activeModule={activeWorkspace === "overview" ? activeModule : ""} onNavigate={selectWorkspace} /> : null}
               {workspace.id === "accounts" ? <AccountWorkspace activeModule={activeWorkspace === "accounts" ? activeModule : ""} /> : null}
               {workspace.id === "hr" ? <HrWorkspace activeModule={activeWorkspace === "hr" ? activeModule : ""} /> : null}
-              {workspace.id === "warehouse" ? <WarehouseWorkspace activeModule={activeWorkspace === "warehouse" ? activeModule : ""} /> : null}
+              {workspace.id === "warehouse" ? <WarehouseWorkspace activeModule={activeWorkspace === "warehouse" ? activeModule : ""} onNavigate={selectWorkspace} /> : null}
               {workspace.id === "procurement" ? <ProcurementWorkspace activeModule={activeWorkspace === "procurement" ? activeModule : ""} /> : null}
               {workspace.id === "seasonal" ? <SeasonalWorkspace activeModule={activeWorkspace === "seasonal" ? activeModule : ""} /> : null}
               {workspace.id === "reports" ? <ReportsWorkspace activeModule={activeWorkspace === "reports" ? activeModule : ""} /> : null}

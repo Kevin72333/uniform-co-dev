@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { durableImportFingerprintPayload, durableImportLabels, durableImportMappingVersion, durableImportMimeForFilename, durableImportTypes, type DurableImportType } from "@/src/domain/durable-import";
 import { getSampleDurableRows } from "@/src/domain/master-data-samples";
 import { masterRowsToCsv } from "@/src/domain/master-data";
@@ -44,7 +44,7 @@ type DurableImportRecovery = {
   confirmKey: string | null;
 };
 
-const recoveryStorageKey = "uniform-co:durable-import-recovery";
+const defaultRecoveryStorageKey = "uniform-co:durable-import-recovery";
 
 async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -63,9 +63,19 @@ const statusLabels: Record<string, string> = {
   CANCELLED: "已取消",
 };
 
-export default function DurableImportPanel() {
+type Props = {
+  allowedImportTypes?: readonly DurableImportType[];
+  recoveryStorageKey?: string;
+};
+
+export default function DurableImportPanel({ allowedImportTypes, recoveryStorageKey = defaultRecoveryStorageKey }: Props) {
   const client = getSupabaseBrowserClient();
-  const [importType, setImportType] = useState<DurableImportType>("EMPLOYEES");
+  const visibleImportTypes = useMemo(
+    () => durableImportTypes.filter((type) => !allowedImportTypes || allowedImportTypes.includes(type)),
+    [allowedImportTypes],
+  );
+  const defaultImportType = visibleImportTypes[0] ?? "EMPLOYEES";
+  const [importType, setImportType] = useState<DurableImportType>(defaultImportType);
   const [file, setFile] = useState<File | null>(null);
   const [batch, setBatch] = useState<ImportBatch | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,7 +105,7 @@ export default function DurableImportPanel() {
     const next = { ...current, ...overrides };
     recoveryRef.current = next;
     window.localStorage.setItem(recoveryStorageKey, JSON.stringify(next));
-  }, [batch?.id, file, importType]);
+  }, [batch?.id, file, importType, recoveryStorageKey]);
 
   const refreshBatch = useCallback(async (batchId: string): Promise<ImportBatch | null> => {
     if (!client || !batchId) return null;
@@ -131,6 +141,7 @@ export default function DurableImportPanel() {
         if (!raw) return;
         const saved = JSON.parse(raw) as DurableImportRecovery;
         if (!saved.operationKey || !saved.importType) return;
+        if (!visibleImportTypes.includes(saved.importType)) return;
         recoveryRef.current = saved;
         operationRef.current = saved.operationKey;
         cancelOperationRef.current = saved.cancelKey;
@@ -161,7 +172,7 @@ export default function DurableImportPanel() {
     }
     void recover();
     return () => { active = false; };
-  }, [client, refreshBatch]);
+  }, [client, refreshBatch, recoveryStorageKey, visibleImportTypes]);
 
   useEffect(() => {
     if (!batch?.id || !client || ["APPLIED", "FAILED", "CANCELLED"].includes(batch.status)) return;
@@ -205,7 +216,7 @@ export default function DurableImportPanel() {
 
   function startNewBatch() {
     resetForNewFile(null);
-    setImportType("EMPLOYEES");
+    setImportType(defaultImportType);
     setCancelReason("使用者取消未完成匯入");
   }
 
@@ -375,7 +386,7 @@ export default function DurableImportPanel() {
     <div className="panel-heading"><div><p className="eyebrow">06 / DURABLE IMPORT</p><h2>檔案上傳與耐久匯入</h2></div><span className={`status-pill ${batch?.status === "APPLIED" ? "success" : batch?.status === "FAILED" ? "danger" : ""}`}>{batch ? statusLabels[batch.status] ?? batch.status : "尚未建立批次"}</span></div>
     <p className="auth-message">瀏覽器只把 CSV／XLSX 直傳到資料庫建立的 private key；不把檔案送進 Vercel request，也不持有 worker／service-role 權限。worker 確認檔案後才解析、預覽差異，使用者確認後才 APPLY。</p>
     <div className="form-grid master-tools">
-      <label className="field"><span>匯入類型</span><select value={importType} onChange={(event) => { if (!canChangeDurableImportType(false, batch?.status)) return; resetForNewFile(null); setImportType(event.target.value as DurableImportType); }} disabled={!canChangeType}>{durableImportTypes.map((type) => <option key={type} value={type}>{durableImportLabels[type]}</option>)}</select></label>
+      <label className="field"><span>匯入類型</span><select value={importType} onChange={(event) => { if (!canChangeDurableImportType(false, batch?.status)) return; resetForNewFile(null); setImportType(event.target.value as DurableImportType); }} disabled={!canChangeType}>{visibleImportTypes.map((type) => <option key={type} value={type}>{durableImportLabels[type]}</option>)}</select></label>
       <label className="file-picker"><span>選擇 CSV／XLSX</span><input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => selectFile(event.target.files?.[0] ?? null)} disabled={busy || Boolean(batch && batch.status !== "AWAITING_UPLOAD")} /></label>
     </div>
     {batch && !canChangeType ? <p className="muted">目前批次仍在處理中；請先取消或完成目前批次，才能切換匯入類型。</p> : null}

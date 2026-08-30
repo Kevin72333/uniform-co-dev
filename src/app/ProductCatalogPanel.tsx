@@ -93,9 +93,9 @@ export default function ProductCatalogPanel() {
           <p className="eyebrow">PRODUCT CATALOG</p>
           <h2>目前商品清單</h2>
         </div>
-        <span className="status-pill">RLS / READ ONLY</span>
+        <span className="status-pill">RLS / CATALOG</span>
       </div>
-      <p className="auth-message">這裡只讀取目前啟用的制服品號與可見的供應商 MOQ 關係；需要新增或調整資料時，請使用下方主檔匯入／匯出入口。</p>
+      <p className="auth-message">這裡集中檢視目前品號、供應商與 MOQ 關係；新增、修改、停用、匯入與匯出請使用本模組下方的操作入口。</p>
       <div className="catalog-toolbar">
         <label className="field">
           搜尋品號／品名／供應商

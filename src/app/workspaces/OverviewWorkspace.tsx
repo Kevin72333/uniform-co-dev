@@ -41,9 +41,12 @@ export default function OverviewWorkspace({ activeModule, onNavigate }: Props) {
             <p className="eyebrow">DURABLE IMPORT</p>
             <h2 id="overview-import-title">耐久匯入</h2>
           </div>
-          <p>大檔案匯入保留批次、差異與確認狀態，不繞過 worker 與資料庫防線。</p>
+          <p>機構、部門與員工的大檔案匯入保留批次、差異與確認狀態；商品與期初庫存已分流至各自管理模組。</p>
         </div>
-        <DurableImportPanel />
+        <DurableImportPanel
+          allowedImportTypes={["INSTITUTIONS", "DEPARTMENTS", "EMPLOYEES"]}
+          recoveryStorageKey="uniform-co:durable-import-foundation-recovery"
+        />
       </section>
     </div>
   );

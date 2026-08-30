@@ -1,5 +1,7 @@
 import MasterDataPanel, { type MasterEntityType } from "./MasterDataPanel";
 import ProductCatalogPanel from "./ProductCatalogPanel";
+import ProductMasterEditorPanel from "./ProductMasterEditorPanel";
+import DurableImportPanel from "./DurableImportPanel";
 
 const productEntityTypes: readonly MasterEntityType[] = ["UNIFORM_ITEMS", "SUPPLIERS", "SUPPLIER_ITEMS"];
 
@@ -7,8 +9,13 @@ export default function ProductManagementPanel() {
   return (
     <div className="workspace-sections">
       <ProductCatalogPanel />
+      <ProductMasterEditorPanel />
       <div className="workspace-panel-grid workspace-panel-grid--balanced">
         <MasterDataPanel allowedEntityTypes={productEntityTypes} />
+        <DurableImportPanel
+          allowedImportTypes={["UNIFORM_ITEMS", "SUPPLIERS", "SUPPLIER_ITEMS"]}
+          recoveryStorageKey="uniform-co:durable-import-product-recovery"
+        />
         <section className="panel" aria-label="商品管理說明">
         <div className="panel-heading">
           <div>
@@ -28,7 +35,7 @@ export default function ProductManagementPanel() {
             <span><strong>供應商品號／MOQ</strong><small>MOQ 屬於供應商與品號的關係，不會被誤當成全域商品欄位。</small></span>
           </div>
         </div>
-        <p className="auth-message">本模組只使用既有主檔匯入／匯出 RPC；匯入先預覽，正式驗證、唯一鍵、停用與歷史引用保護由 Supabase 執行。</p>
+        <p className="auth-message">小批次可直接預覽 CSV／JSON；大批次使用耐久 CSV／XLSX worker。兩條匯入路徑都由 Supabase 執行正式驗證、唯一鍵、停用與歷史引用保護。</p>
         </section>
       </div>
     </div>

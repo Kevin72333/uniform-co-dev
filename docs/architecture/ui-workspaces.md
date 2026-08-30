@@ -32,9 +32,10 @@ src/app/page.tsx
 
 ## 商品與庫存模組邊界
 
-- `總覽 > 商品管理` 是 `ProductManagementPanel` 的組合入口。`ProductCatalogPanel` 只讀目前品號與可見供應商 MOQ，主檔操作只提供制服品號、供應商及供應商品號／MOQ 三類資料；`MasterDataPanel` 透過 `allowedEntityTypes` 重用同一套預覽、匯入、匯出與 RPC 介面，組織機構／部門則留在 `組織主檔`。
-- `倉庫作業 > 庫存管理` 是 `InventoryManagementPanel` 的組合入口。`InventoryAvailabilityPanel` 只讀 `v_item_availability` 顯示兩倉帳面量、品號合計預留與可申請量；`InventoryCalculator` 保留為不寫入的規則試算。盤點、發貨與更正仍各自留在既有面板，不複製業務狀態。
+- `總覽 > 商品管理` 是 `ProductManagementPanel` 的組合入口。`ProductCatalogPanel` 提供目前品號與可見供應商 MOQ 清單；`ProductMasterEditorPanel` 提供制服品號、供應商及供應商品號／MOQ 的單筆新增、修改與停用；`MasterDataPanel` 提供小批次 CSV／JSON 預覽、匯入與匯出，`DurableImportPanel` 以獨立 recovery key 提供大批次 CSV／XLSX。組織機構／部門則留在 `組織主檔`，避免資料責任重疊。
+- `倉庫作業 > 庫存管理` 是 `InventoryManagementPanel` 的組合入口。`InventoryAvailabilityPanel` 只讀 `v_item_availability` 顯示兩倉帳面量、品號合計預留與可申請量；`InventoryOperationHub` 只提供導向，將期初、發貨、盤點、採購入庫與更正交給既有正式面板；`InventoryHistoryExportPanel` 只從 security-invoker views 讀取並下載 CSV；`InventoryCalculator` 保留為不寫入的規則試算。
 - 商品與庫存模組不建立第二份數量或商品資料。商品匯入走既有主檔 RPC；庫存數字仍由 `inventory_balances`／不可變流水及 security-invoker view 提供，瀏覽器不直接寫入餘額。
+- 商品刪除採 `is_active=false` 停用；庫存草稿可以修改，已過帳資料只能追加更正或退回。庫存匯出 metadata 透過 `0076_inventory_report_export_audit.sql` 的 `record_report_export` 寫入 append-only `audit_events`。
 
 ## 狀態與資料邊界
 

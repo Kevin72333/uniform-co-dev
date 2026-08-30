@@ -3,10 +3,11 @@ import StocktakeCorrectionPanel from "../StocktakeCorrectionPanel";
 import StocktakePanel from "../StocktakePanel";
 import WarehouseShipmentPanel from "../WarehouseShipmentPanel";
 import WarehouseTransferCorrectionPanel from "../WarehouseTransferCorrectionPanel";
+import type { WorkspaceId } from "./workspace-config";
 
-type Props = { activeModule: string };
+type Props = { activeModule: string; onNavigate: (workspaceId: WorkspaceId, anchor: string) => void };
 
-export default function WarehouseWorkspace({ activeModule }: Props) {
+export default function WarehouseWorkspace({ activeModule, onNavigate }: Props) {
   return (
     <div className="workspace-sections">
       <section className="workspace-section" id="workspace-module-panel-warehouse-inventory-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-inventory-title" hidden={activeModule !== "warehouse-inventory-title"}>
@@ -15,9 +16,9 @@ export default function WarehouseWorkspace({ activeModule }: Props) {
             <p className="eyebrow">INVENTORY MANAGEMENT</p>
             <h2 id="warehouse-inventory-title">庫存管理</h2>
           </div>
-          <p>從品號清單檢視兩倉帳面量、合計預留與可申請量；庫存規則試算不會直接寫入正式資料。</p>
+          <p>集中檢視、匯出與啟動兩倉庫存作業；正式數量只能由期初、入庫、發貨、盤點、退回或更正流水更新。</p>
         </div>
-        <InventoryManagementPanel />
+        <InventoryManagementPanel onNavigate={onNavigate} />
       </section>
 
       <section className="workspace-section" id="workspace-module-panel-warehouse-control-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-control-title" hidden={activeModule !== "warehouse-control-title"}>

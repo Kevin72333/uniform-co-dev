@@ -8,7 +8,7 @@ export const workspaceDefinitions = [
     modules: [
       { anchor: "overview-dashboard-title", label: "營運總覽", keywords: "總覽 KPI 工作佇列 快速入口 進度 活動" },
       { anchor: "overview-access-title", label: "組織主檔", keywords: "主檔 機構 部門 資料基礎" },
-      { anchor: "overview-products-title", label: "商品管理", keywords: "商品 制服品號 品名 尺寸 季別 供應商 MOQ 供應商品號" },
+      { anchor: "overview-products-title", label: "商品管理", keywords: "商品 制服品號 品名 尺寸 季別 供應商 MOQ 供應商品號 新增 修改 停用 刪除 匯入 匯出" },
       { anchor: "overview-import-title", label: "耐久匯入", keywords: "匯入 批次 差異 確認 worker" },
     ],
   },
@@ -40,7 +40,7 @@ export const workspaceDefinitions = [
     eyebrow: "WAREHOUSE OPERATIONS",
     description: "以模組化方式處理兩倉庫存、發貨、盤點與更正；倉庫名稱固定為人資倉與總倉。",
     modules: [
-      { anchor: "warehouse-inventory-title", label: "庫存管理", keywords: "庫存 人資倉 總倉 預留 可申請量 品號 庫存清單" },
+      { anchor: "warehouse-inventory-title", label: "庫存管理", keywords: "庫存 人資倉 總倉 預留 可申請量 品號 庫存清單 期初 入庫 發貨 盤點 更正 匯出" },
       { anchor: "warehouse-control-title", label: "發貨作業", keywords: "發貨 調庫 人資倉 總倉 POST 實際調庫量" },
       { anchor: "warehouse-stocktake-title", label: "盤點與倉庫更正", keywords: "盤點 fencing 調庫 更正 理由" },
     ],

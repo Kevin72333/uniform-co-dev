@@ -6,7 +6,7 @@ describe("workspace module index", () => {
     expect(workspaceDefinitions.find((workspace) => workspace.id === "overview")?.modules).toContainEqual({
       anchor: "overview-products-title",
       label: "商品管理",
-      keywords: "商品 制服品號 品名 尺寸 季別 供應商 MOQ 供應商品號",
+      keywords: "商品 制服品號 品名 尺寸 季別 供應商 MOQ 供應商品號 新增 修改 停用 刪除 匯入 匯出",
     });
     expect(searchWorkspaceModules("MOQ")[0]?.anchor).toBe("overview-products-title");
   });

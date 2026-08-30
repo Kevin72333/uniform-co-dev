@@ -1,10 +1,10 @@
 # AI Agent 接手指南
 
-## 正式應用目前狀態（2026-08-29）
+## 正式應用目前狀態（2026-08-30）
 
 正式 Next.js 應用已部署至 [uniform-co.vercel.app](https://uniform-co.vercel.app/)，GitHub `Kevin72333/uniform-co` 的 `main` 分支是目前交付來源，Supabase 負責登入、PostgreSQL、RLS 與 Storage。正式應用的功能資料來源是 `src/`、`src/domain/`、`src/server/` 與 `supabase/migrations/`；[`prototype/uniform-management-prototype.html`](./prototype/uniform-management-prototype.html) 仍是獨立的內容／流程原型，不是正式資料來源。
 
-## 最新 AI 接手快照（2026-08-29）
+## 最新 AI 接手快照（2026-08-30）
 
 ### 接手第一步
 
@@ -35,7 +35,7 @@ Repository-local 工作目前已收尾，最新完整驗證為：49 個 test fil
 - `src/app/WorkspaceShell.tsx`：登入 gate、session refresh、七個 workspace、hash 導航、共用 topbar 與 responsive shell。
 - `src/app/workspaces/workspace-config.ts`：workspace 定義、功能頁籤與搜尋索引；目前 workspace 為總覽、帳號管理、人資需求、倉庫作業、採購與入庫、換季活動、報表。
 - `src/app/workspaces/*Workspace.tsx`：每個 workspace 的模組組裝；頁籤使用 `activeModule` 切換內容，維持在同一工作區，不用按鈕觸發頁面下移。
-- 商品與庫存模組：`src/app/ProductManagementPanel.tsx` 組合商品清單與品號／供應商／MOQ 主檔操作；`src/app/InventoryManagementPanel.tsx` 組合兩倉可用量與規則試算。商品數量與庫存數字仍分別以既有主檔 RPC、`v_item_availability` 與庫存交易來源為準。
+- 商品與庫存模組：`src/app/ProductManagementPanel.tsx` 組合商品清單、單筆新增／修改／停用、主檔小批次匯入／匯出與耐久匯入；`src/app/InventoryManagementPanel.tsx` 組合兩倉可用量、期初匯入、庫存異動入口、庫存／流水 CSV 匯出與規則試算。`ProductMasterEditorPanel` 仍透過 `apply_master_import` 保存，`InventoryOperationHub` 只導向既有期初／發貨／盤點／入庫／更正 seam；商品數量與庫存數字仍分別以既有主檔 RPC、`v_item_availability` 與庫存交易來源為準。
 - `src/app/WorkspaceTopbar.tsx`：搜尋、通知、日期／資料狀態、帳號操作與風格下拉選單。
 - `src/app/AccountAdminPanel.tsx`、`src/app/api/admin/accounts/route.ts`、`src/server/account-admin.ts`：帳號管理模組。2–50 個小寫英數字的登入帳號與至少 6 字元密碼必填，聯絡 Email 選填且不作登入；建立或編輯時可一次管理六角色，並支援需求窗口機構／部門範圍、啟用／停用、Auth 綁定重設／解除與保留業務歷史的刪除。所有操作透過 server-side API、idempotency key、SYSTEM_ADMIN 防線與稽核理由處理。
 - `src/app/use-appearance-theme.ts` 與 `src/app/globals.css`：外觀 adapter seam。下拉選項為 `AP`、`MX`、`GS`、`MB`、`SH`；`GS` 的顯示名稱是 GS，但程式 id／`data-appearance` 仍是 `ga`，不要只為改名而破壞既有 localStorage 或 motion 判斷。`SH` 是 shadcn/ui-inspired neutral token 版本，未加入 shadcn runtime dependency。
@@ -49,11 +49,13 @@ Repository-local 工作目前已收尾，最新完整驗證為：49 個 test fil
 5. 本機與 CI 驗證使用 Node/npm 指令；本文件的範例以 `cmd.exe`／一般 shell 可執行，不依賴 PowerShell。
 6. Storage cleanup 的 eligibility 只能由 `0071_storage_cleanup_contract.sql`／`0072_import_terminal_retention.sql` 的 DB RPC 決定；runner 只能做第二層 bucket/key sanity check。不要在 script／workflow 自行推論可刪狀態、放寬 24 小時下限或 FAILED／CANCELLED import 的 90 天 terminal retention、重設 renderer/import lease，或刪除 artifact／import／audit evidence row。
 7. DB staging payload retention 只走 `0074_import_staging_payload_retention.sql` 的 `job_import_retention` 薄 RPC。它只 scrub FAILED／CANCELLED 滿 90 天 batch 的 `raw_values`／`normalized_values`／`validation_errors`，保留 batch/row/chunk/diff evidence 與 `staging_purged_at`；purge 後不可 restart。不要把 `job_storage_cleanup` 擴權為 DB staging purge worker。
+8. 商品主檔的刪除語意是停用 `isActive=false`，不可刪除已被交易引用的列；庫存管理的修改／刪除語意是修改草稿、取消未過帳工作或建立更正，不能直接 UPDATE／DELETE `inventory_balances` 或 append-only ledger。
 
 ### 已知交接界線
 
 - 第一批正式帳號、角色指派、需求窗口範圍、GitHub/Vercel owner 與備援聯絡人仍待由使用者提供；管理模組本身已完成。
 - 鼎新正式格式、正式 PDF 列印樣式與期初真實資料仍待外部資料；Renderer runner、Storage proxy/finalize 與 disposable-staging active smoke harness 已完成，但真實 Storage／RLS／signed URL／並行鎖 staging smoke 仍屬正式驗收事項。
+- 商品／庫存模組的本機 UI、既有 RPC 串接、期初分流與庫存匯出已完成；`0076_inventory_report_export_audit.sql`（手動 SQL 副本在 `supabase/manual/`）仍須由使用者在已具備 `audit_events` 的 Supabase project 執行，並以 HR／WAREHOUSE session 驗證匯出稽核與各操作 RLS。
 - Storage cleanup 的 DB contract、dry-run/execute runner、contract tests 與每日 dry-run workflow 已落地；`0072_import_terminal_retention.sql` 已提供 FAILED／CANCELLED source object 的 90-day DB eligibility，且不刪除 import DB evidence。`0074_import_staging_payload_retention.sql` 的 `job_import_retention` 90-day DB staging payload scrub contract，以及獨立 dry-run/execute runner、preflight 與每日 dry-run workflow 也已落地；runner 只呼叫 0074 薄 RPC，保留 row shell/chunk/diff 並留下 `staging_purged_at`。Storage／DB staging 兩種 destructive 模式仍必須在受保護 staging 以各自 job role 與雙 gate 實際驗收，尚未啟用 destructive cron。
 - 版面基線 commit 為 `3059723`；後續只調整視覺時保留 AP／MX／GS／MB／SH 五套選項與 `uniform:appearance-theme` localStorage key。
 
