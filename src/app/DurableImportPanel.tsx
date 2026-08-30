@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { durableImportFingerprintPayload, durableImportLabels, durableImportMappingVersion, durableImportMimeForFilename, durableImportTypes, type DurableImportType } from "@/src/domain/durable-import";
 import { getSampleDurableRows } from "@/src/domain/master-data-samples";
 import { masterRowsToCsv } from "@/src/domain/master-data";
+import { canChangeDurableImportType, formatDurableImportCount, formatDurableImportDate } from "@/src/domain/durable-import-ui";
 import { canonicalFingerprint } from "@/src/lib/fingerprint";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
@@ -96,12 +97,13 @@ export default function DurableImportPanel() {
     window.localStorage.setItem(recoveryStorageKey, JSON.stringify(next));
   }, [batch?.id, file, importType]);
 
-  const refreshBatch = useCallback(async (batchId: string) => {
-    if (!client) return;
+  const refreshBatch = useCallback(async (batchId: string): Promise<ImportBatch | null> => {
+    if (!client || !batchId) return null;
     const { data, error } = await client.from("import_batches")
       .select("id,batch_no,import_type,status,original_filename,expected_mime_type,expected_size_bytes,storage_bucket,storage_object_key,upload_expires_at,mapping_version,row_count,valid_row_count,error_row_count,last_error_code,last_error_message")
       .eq("id", batchId).maybeSingle();
-    if (!error && data) {
+    if (!error && data && typeof data.id === "string") {
+      const refreshedBatch = data as ImportBatch;
       if (["VALIDATED", "FAILED", "APPLYING", "APPLIED"].includes(data.status)) {
         const rowResult = await client.from("import_rows")
           .select("row_number,proposed_action,validation_errors,import_field_diffs(field_name,old_value,new_value,confirmed)")
@@ -113,8 +115,10 @@ export default function DurableImportPanel() {
         setRows([]);
         setRowsLoadedForBatch(null);
       }
-      setBatch(data as ImportBatch);
+      setBatch(refreshedBatch);
+      return refreshedBatch;
     }
+    return null;
   }, [client]);
 
   useEffect(() => {
@@ -145,10 +149,12 @@ export default function DurableImportPanel() {
           });
           recoveredBatch = data as ImportBatch | null;
         }
-        if (!active || !recoveredBatch) return;
-        if (["VALIDATED", "FAILED", "APPLYING", "APPLIED"].includes(recoveredBatch.status)) await refreshBatch(recoveredBatch.id);
-        else setBatch(recoveredBatch);
-        setMessage(`已恢復批次 ${recoveredBatch.batch_no}；重試會沿用原冪等鍵。若狀態需要上傳，請重新選同一檔案。`);
+        if (!active || !recoveredBatch || typeof recoveredBatch.id !== "string") return;
+        const refreshedBatch = await refreshBatch(recoveredBatch.id);
+        if (!active) return;
+        const visibleBatch = refreshedBatch ?? recoveredBatch;
+        if (!refreshedBatch) setBatch(visibleBatch);
+        setMessage(`已恢復批次 ${visibleBatch.batch_no ?? "未知批次"}；重試會沿用原冪等鍵。若狀態需要上傳，請重新選同一檔案。`);
       } catch {
         recoveryRef.current = null;
       }
@@ -262,10 +268,16 @@ export default function DurableImportPanel() {
       setBusy(false); return;
     }
     const nextBatch = data as ImportBatch;
-    setBatch(nextBatch);
-    persistRecovery({ batchId: nextBatch.id });
-    if (nextBatch.status !== "AWAITING_UPLOAD") {
-      setMessage(`已查回批次 ${nextBatch.batch_no}，目前狀態：${statusLabels[nextBatch.status] ?? nextBatch.status}`);
+    const refreshedBatch = await refreshBatch(nextBatch.id);
+    const activeBatch = refreshedBatch ?? nextBatch;
+    if (!activeBatch.storage_bucket || !activeBatch.storage_object_key) {
+      setMessage("批次已建立，但回傳欄位不完整；請按重新查詢批次後再重試。不要另建批次。");
+      setBusy(false); return;
+    }
+    setBatch(activeBatch);
+    persistRecovery({ batchId: activeBatch.id });
+    if (activeBatch.status !== "AWAITING_UPLOAD") {
+      setMessage(`已查回批次 ${activeBatch.batch_no ?? "未知批次"}，目前狀態：${statusLabels[activeBatch.status] ?? activeBatch.status}`);
       setBusy(false); return;
     }
     let fileHash: string;
@@ -276,7 +288,7 @@ export default function DurableImportPanel() {
       setBusy(false);
       return;
     }
-    const uploadResult = await client.storage.from(nextBatch.storage_bucket).upload(nextBatch.storage_object_key, file, {
+    const uploadResult = await client.storage.from(activeBatch.storage_bucket).upload(activeBatch.storage_object_key, file, {
       cacheControl: "3600",
       contentType: mimeType,
       upsert: false,
@@ -285,13 +297,21 @@ export default function DurableImportPanel() {
     if (uploadResult.error) {
       setMessage(`檔案上傳結果未知：${uploadResult.error.message}。請保留同一檔案與批次重試，不會另建 batch。`);
     } else {
-      setMessage(`檔案已直傳固定 private key；等待 worker 核對 MIME／大小／SHA-256 後進入解析。批次：${nextBatch.batch_no}`);
+      setMessage(`檔案已直傳固定 private key；等待 worker 核對 MIME／大小／SHA-256 後進入解析。批次：${activeBatch.batch_no ?? "未知批次"}`);
     }
     setBusy(false);
   }
 
   async function cancelBatch() {
-    if (!client || !batch || !cancelReason.trim()) {
+    if (!client || !batch) {
+      setMessage("目前沒有可取消的批次。" );
+      return;
+    }
+    if (typeof batch.id !== "string" || !batch.id.trim()) {
+      setMessage("目前批次缺少有效識別碼，請先按重新查詢批次。" );
+      return;
+    }
+    if (!cancelReason.trim()) {
       setMessage("取消批次前請填寫理由。" );
       return;
     }
@@ -308,6 +328,17 @@ export default function DurableImportPanel() {
     });
     if (error) setMessage(`取消失敗或結果未知：${error.message}；請沿用同一批次重試。`);
     else { setBatch(data as ImportBatch); setMessage("批次已取消；固定 Storage object 會由受保護清理工作依引用與保存政策處理。"); cancelOperationRef.current = null; persistRecovery({ cancelKey: null }); }
+    setBusy(false);
+  }
+
+  async function reloadBatch() {
+    if (!batch?.id) {
+      setMessage("目前批次缺少有效識別碼，請重新整理頁面恢復批次。" );
+      return;
+    }
+    setBusy(true);
+    const refreshedBatch = await refreshBatch(batch.id);
+    setMessage(refreshedBatch ? `已重新查詢批次 ${refreshedBatch.batch_no}。` : "查不到目前批次，請確認登入帳號仍有匯入讀取權限。" );
     setBusy(false);
   }
 
@@ -338,20 +369,22 @@ export default function DurableImportPanel() {
   }
 
   if (!client) return <section className="panel import-panel" aria-label="耐久匯入批次"><div className="panel-heading"><div><p className="eyebrow">06 / DURABLE IMPORT</p><h2>耐久匯入批次</h2></div><span className="status-pill">預覽模式</span></div><p className="auth-message">設定 Supabase env 並登入後，才能直傳固定 private Storage key；解析與正式套用由受控 worker 完成。</p></section>;
+  const canChangeType = canChangeDurableImportType(busy, batch?.status);
   const canCancel = batch && !["APPLIED", "FAILED", "CANCELLED"].includes(batch.status);
   return <section className="panel import-panel" aria-label="耐久匯入批次">
     <div className="panel-heading"><div><p className="eyebrow">06 / DURABLE IMPORT</p><h2>檔案上傳與耐久匯入</h2></div><span className={`status-pill ${batch?.status === "APPLIED" ? "success" : batch?.status === "FAILED" ? "danger" : ""}`}>{batch ? statusLabels[batch.status] ?? batch.status : "尚未建立批次"}</span></div>
     <p className="auth-message">瀏覽器只把 CSV／XLSX 直傳到資料庫建立的 private key；不把檔案送進 Vercel request，也不持有 worker／service-role 權限。worker 確認檔案後才解析、預覽差異，使用者確認後才 APPLY。</p>
     <div className="form-grid master-tools">
-      <label className="field"><span>匯入類型</span><select value={importType} onChange={(event) => { resetForNewFile(null); setImportType(event.target.value as DurableImportType); }} disabled={busy || Boolean(batch)}>{durableImportTypes.map((type) => <option key={type} value={type}>{durableImportLabels[type]}</option>)}</select></label>
+      <label className="field"><span>匯入類型</span><select value={importType} onChange={(event) => { if (!canChangeDurableImportType(false, batch?.status)) return; resetForNewFile(null); setImportType(event.target.value as DurableImportType); }} disabled={!canChangeType}>{durableImportTypes.map((type) => <option key={type} value={type}>{durableImportLabels[type]}</option>)}</select></label>
       <label className="file-picker"><span>選擇 CSV／XLSX</span><input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => selectFile(event.target.files?.[0] ?? null)} disabled={busy || Boolean(batch && batch.status !== "AWAITING_UPLOAD")} /></label>
     </div>
-    <div className="button-row"><button className="secondary-button" type="button" onClick={loadSampleFile} disabled={busy || Boolean(batch)}>載入範例檔案</button><button className="secondary-button" type="button" onClick={downloadSampleFile} disabled={busy || Boolean(batch)}>下載範例 CSV</button></div>
+    {batch && !canChangeType ? <p className="muted">目前批次仍在處理中；請先取消或完成目前批次，才能切換匯入類型。</p> : null}
+    <div className="button-row"><button className="secondary-button" type="button" onClick={loadSampleFile} disabled={!canChangeType}>載入範例檔案</button><button className="secondary-button" type="button" onClick={downloadSampleFile} disabled={!canChangeType}>下載範例 CSV</button></div>
     {sampleMode ? <label className="checkbox-field"><input type="checkbox" checked={sampleConfirmed} onChange={(event) => setSampleConfirmed(event.target.checked)} disabled={busy} />我確認這是 DEMO 測試資料，且目前連線的是 disposable staging</label> : null}
     {file ? <p className="file-name">{file.name}／{Math.ceil(file.size / 1024)} KB／{durableImportMimeForFilename(file.name)}</p> : null}
-    <div className="button-row"><button className="primary-button" type="button" onClick={() => void startUpload()} disabled={busy || !file || Boolean(batch && batch.status !== "AWAITING_UPLOAD")}>{busy ? "處理中…" : batch ? "重試目前批次" : "建立批次並直傳"}</button>{batch?.status === "VALIDATED" ? <button className="primary-button" type="button" onClick={() => void confirmBatch()} disabled={busy || rowsLoadedForBatch !== batch.id}>確認發布整批</button> : null}{canCancel ? <button className="secondary-button" type="button" onClick={() => void cancelBatch()} disabled={busy}>取消批次</button> : null}{batch && ["APPLIED", "FAILED", "CANCELLED"].includes(batch.status) ? <button className="secondary-button" type="button" onClick={startNewBatch} disabled={busy}>建立新批次</button> : null}</div>
+    <div className="button-row"><button className="primary-button" type="button" onClick={() => void startUpload()} disabled={busy || !file || Boolean(batch && batch.status !== "AWAITING_UPLOAD")}>{busy ? "處理中…" : batch ? "重試目前批次" : "建立批次並直傳"}</button>{batch?.status === "VALIDATED" ? <button className="primary-button" type="button" onClick={() => void confirmBatch()} disabled={busy || rowsLoadedForBatch !== batch.id}>確認發布整批</button> : null}{canCancel ? <button className="secondary-button" type="button" onClick={() => void cancelBatch()} disabled={busy}>取消批次</button> : null}{batch && !["APPLIED", "FAILED", "CANCELLED"].includes(batch.status) ? <button className="secondary-button" type="button" onClick={() => void reloadBatch()} disabled={busy}>重新查詢批次</button> : null}{batch && ["APPLIED", "FAILED", "CANCELLED"].includes(batch.status) ? <button className="secondary-button" type="button" onClick={startNewBatch} disabled={busy}>建立新批次</button> : null}</div>
     {canCancel ? <label className="field"><span>取消理由（必填）</span><input value={cancelReason} onChange={(event) => { cancelOperationRef.current = null; setCancelReason(event.target.value); }} disabled={busy} /></label> : null}
-    {batch ? <div className="summary-list"><p className="file-name">批次 {batch.batch_no}／{batch.status}／預期 {batch.expected_size_bytes} bytes／期限 {new Date(batch.upload_expires_at).toLocaleString("zh-TW")}</p><p className="muted">解析列數：{batch.row_count}；有效：{batch.valid_row_count}；錯誤：{batch.error_row_count}{batch.last_error_message ? `／${batch.last_error_message}` : ""}</p>{rows.filter((row) => Array.isArray(row.validation_errors) && row.validation_errors.length > 0).slice(0, 10).map((row) => <p className="auth-message" key={`error-${row.row_number}`}>第 {row.row_number} 列：{JSON.stringify(row.validation_errors)}</p>)}{rows.flatMap((row) => row.import_field_diffs ?? []).filter((diff) => !diff.confirmed).slice(0, 10).map((diff, index) => <p className="auth-message" key={`diff-${diff.field_name}-${index}`}>待確認差異：{diff.field_name}／舊值 {JSON.stringify(diff.old_value)}／新值 {JSON.stringify(diff.new_value)}</p>)}{batch.status === "VALIDATED" && rowsLoadedForBatch === batch.id && rows.flatMap((row) => row.import_field_diffs ?? []).filter((diff) => !diff.confirmed).length > 0 ? <label className="checkbox-field"><input type="checkbox" checked={differencesReviewed} onChange={(event) => setDifferencesReviewed(event.target.checked)} disabled={busy} />我已檢查全部欄位差異，同意按預覽結果整批發布（畫面列出前 10 筆，完整差異以後端逐列紀錄保存）</label> : null}</div> : null}
+    {batch ? <div className="summary-list"><p className="file-name">批次 {batch.batch_no ?? "未知批次"}／{batch.status}／預期 {formatDurableImportCount(batch.expected_size_bytes)} bytes／期限 {formatDurableImportDate(batch.upload_expires_at)}</p><p className="muted">解析列數：{formatDurableImportCount(batch.row_count)}；有效：{formatDurableImportCount(batch.valid_row_count)}；錯誤：{formatDurableImportCount(batch.error_row_count)}{batch.last_error_message ? `／${batch.last_error_message}` : ""}</p>{rows.filter((row) => Array.isArray(row.validation_errors) && row.validation_errors.length > 0).slice(0, 10).map((row) => <p className="auth-message" key={`error-${row.row_number}`}>第 {row.row_number} 列：{JSON.stringify(row.validation_errors)}</p>)}{rows.flatMap((row) => row.import_field_diffs ?? []).filter((diff) => !diff.confirmed).slice(0, 10).map((diff, index) => <p className="auth-message" key={`diff-${diff.field_name}-${index}`}>待確認差異：{diff.field_name}／舊值 {JSON.stringify(diff.old_value)}／新值 {JSON.stringify(diff.new_value)}</p>)}{batch.status === "VALIDATED" && rowsLoadedForBatch === batch.id && rows.flatMap((row) => row.import_field_diffs ?? []).filter((diff) => !diff.confirmed).length > 0 ? <label className="checkbox-field"><input type="checkbox" checked={differencesReviewed} onChange={(event) => setDifferencesReviewed(event.target.checked)} disabled={busy} />我已檢查全部欄位差異，同意按預覽結果整批發布（畫面列出前 10 筆，完整差異以後端逐列紀錄保存）</label> : null}</div> : null}
     {message ? <p className={message.startsWith("檔案已") || message.startsWith("批次已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
   </section>;
 }
