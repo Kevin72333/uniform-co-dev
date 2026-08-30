@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import AuthPanel from "./AuthPanel";
 import AuthSessionBoundary from "./AuthSessionBoundary";
+import RetainedPanelSet from "./RetainedPanelSet";
 import WorkspaceTopbar from "./WorkspaceTopbar";
 import { useAuthSession } from "./use-auth-session";
 import AccountWorkspace from "./workspaces/AccountWorkspace";
@@ -223,24 +224,29 @@ export default function WorkspaceShell() {
         </nav>
 
         <AuthSessionBoundary>
-          {workspaceDefinitions.map((workspace) => (
-            <section
-              key={workspace.id}
-              id={`workspace-${workspace.id}`}
-              className={`workspace-page ${activeWorkspace === workspace.id ? "is-active" : ""}`}
-              role="tabpanel"
-              aria-labelledby={`workspace-tab-${workspace.id}`}
-              hidden={activeWorkspace !== workspace.id}
-            >
-              {workspace.id === "overview" ? <OverviewWorkspace activeModule={activeWorkspace === "overview" ? activeModule : ""} onNavigate={selectWorkspace} /> : null}
-              {workspace.id === "accounts" ? <AccountWorkspace activeModule={activeWorkspace === "accounts" ? activeModule : ""} /> : null}
-              {workspace.id === "hr" ? <HrWorkspace activeModule={activeWorkspace === "hr" ? activeModule : ""} /> : null}
-              {workspace.id === "warehouse" ? <WarehouseWorkspace activeModule={activeWorkspace === "warehouse" ? activeModule : ""} onNavigate={selectWorkspace} /> : null}
-              {workspace.id === "procurement" ? <ProcurementWorkspace activeModule={activeWorkspace === "procurement" ? activeModule : ""} /> : null}
-              {workspace.id === "seasonal" ? <SeasonalWorkspace activeModule={activeWorkspace === "seasonal" ? activeModule : ""} /> : null}
-              {workspace.id === "reports" ? <ReportsWorkspace activeModule={activeWorkspace === "reports" ? activeModule : ""} /> : null}
-            </section>
-          ))}
+          <RetainedPanelSet
+            idPrefix="workspace"
+            activePanelId={activeWorkspace}
+            panelClassName="workspace-page"
+            activePanelClassName="is-active"
+            panels={workspaceDefinitions.map((workspace) => {
+              const workspaceModule = activeModuleByWorkspace[workspace.id] ?? workspace.modules[0].anchor;
+              return {
+                id: workspace.id,
+                panelId: `workspace-${workspace.id}`,
+                tabId: `workspace-tab-${workspace.id}`,
+                content: <>
+                  {workspace.id === "overview" ? <OverviewWorkspace activeModule={workspaceModule} onNavigate={selectWorkspace} /> : null}
+                  {workspace.id === "accounts" ? <AccountWorkspace activeModule={workspaceModule} /> : null}
+                  {workspace.id === "hr" ? <HrWorkspace activeModule={workspaceModule} /> : null}
+                  {workspace.id === "warehouse" ? <WarehouseWorkspace activeModule={workspaceModule} onNavigate={selectWorkspace} /> : null}
+                  {workspace.id === "procurement" ? <ProcurementWorkspace activeModule={workspaceModule} /> : null}
+                  {workspace.id === "seasonal" ? <SeasonalWorkspace activeModule={workspaceModule} /> : null}
+                  {workspace.id === "reports" ? <ReportsWorkspace activeModule={workspaceModule} /> : null}
+                </>,
+              };
+            })}
+          />
         </AuthSessionBoundary>
       </div>
     </WorkspaceStage>

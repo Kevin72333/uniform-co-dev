@@ -2,9 +2,17 @@
 
 ## 目的
 
-`ModuleWorkbench` 是正式 Next.js 應用的子功能導覽 seam。它把同一業務模組內的標題、說明、工具列、頁籤、ARIA 關聯與內容狀態保存集中在一個深模組；呼叫端只需提供頁籤 id、名稱與內容。
+`ModuleWorkbench` 是正式 Next.js 應用的子功能導覽 seam。它把同一業務模組內的標題、說明、工具列、頁籤、ARIA 關聯與內容狀態保存集中在一個深模組；呼叫端只需提供頁籤 id、名稱與內容。`RetainedPanelSet` 是其下層的掛載 seam，並由 workspace 與 workspace module 導覽共同使用。
 
-頁籤切換使用 `hidden` 保留既有 panel instance，不會因切換而卸載未送出的草稿。資料讀寫 implementation 仍留在原 panel、domain function、server-side route 與 Supabase RPC，工作台不繞過 RLS、冪等、稽核或 POST 狀態機。
+預設 `visited` mount policy 只掛載目前 panel；使用者實際開啟後才保留該 panel instance，切換時以 `hidden` 保存未送出的草稿。這個策略同時套用在七個 workspace、各 workspace module 與 `ModuleWorkbench` 子頁籤，避免登入後由尚未開啟的面板同時發出 Supabase 查詢。資料讀寫 implementation 仍留在原 panel、domain function、server-side route 與 Supabase RPC，工作台不繞過 RLS、冪等、稽核或 POST 狀態機。
+
+## 掛載策略
+
+- `visited`：預設值。首次開啟才掛載，之後保留狀態；適合表單、清單與多數遠端資料面板。
+- `active`：切換後卸載舊 panel；只用於可安全丟棄狀態且重新載入成本低的內容。
+- `all`：登入時立即掛載全部 panel；只有具體預載需求與量測證據時才使用。
+
+`shouldMountRetainedPanel()` 是 mount policy 的純領域 interface；`RetainedPanelSet` 負責 React instance retention、tabpanel id 與 ARIA 關聯。呼叫端不可自行複製 visited set 或 hidden 判斷。
 
 ## 判斷準則
 
@@ -46,4 +54,5 @@
 1. 新增工作台頁籤時，使用穩定英文 id，顯示文字可用中文。
 2. 頁籤只負責任務切換；資料權限與保存規則必須留在原本的深層 domain／RPC module。
 3. 危險操作使用頁面內明確確認，不使用無上下文的原生瀏覽器確認框。
-4. 若子流程切換後可以安全卸載且資料載入成本很高，先擴充工作台 interface 的 mount policy 並補測試，不要讓呼叫端各自實作。
+4. 新 panel 預設沿用 `visited`；若要改成 `active` 或 `all`，需在呼叫端說明丟棄狀態或預載的理由並補 interface 測試。
+5. Workspace 與 workspace module 也必須透過 `RetainedPanelSet` 組裝，不要重新加入整頁 eager mount 或散落的 `hidden={active !== id}` implementation。

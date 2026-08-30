@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type KeyboardEvent, type ReactNode } from "react";
-import { normalizeWorkbenchId, resolveWorkbenchTabId } from "@/src/domain/module-workbench";
+import { normalizeWorkbenchId, resolveWorkbenchTabId, type PanelMountPolicy } from "@/src/domain/module-workbench";
+import RetainedPanelSet from "./RetainedPanelSet";
 
 export type ModuleWorkbenchTab = {
   id: string;
@@ -75,6 +76,7 @@ type Props = {
   onTabChange?: (tabId: string) => void;
   actions?: ReactNode;
   feedback?: ReactNode;
+  mountPolicy?: PanelMountPolicy;
 };
 
 export default function ModuleWorkbench({
@@ -89,6 +91,7 @@ export default function ModuleWorkbench({
   onTabChange,
   actions,
   feedback,
+  mountPolicy = "visited",
 }: Props) {
   const normalizedPrefix = normalizeWorkbenchId(idPrefix) || "module";
   const definitions = tabs.map(({ id, label }) => ({ id, label }));
@@ -121,18 +124,13 @@ export default function ModuleWorkbench({
         />
       </section>
       {feedback}
-      {tabs.map((tab) => {
-        const tabId = `${normalizedPrefix}-tab-${normalizeWorkbenchId(tab.id)}`;
-        const panelId = `${normalizedPrefix}-panel-${normalizeWorkbenchId(tab.id)}`;
-        return <div
-          key={tab.id}
-          id={panelId}
-          className="module-workbench-content"
-          role="tabpanel"
-          aria-labelledby={tabId}
-          hidden={selectedTabId !== tab.id}
-        >{tab.content}</div>;
-      })}
+      <RetainedPanelSet
+        idPrefix={normalizedPrefix}
+        activePanelId={selectedTabId}
+        mountPolicy={mountPolicy}
+        panelClassName="module-workbench-content"
+        panels={tabs.map(({ id, content }) => ({ id, content }))}
+      />
     </div>
   );
 }

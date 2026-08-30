@@ -3,6 +3,7 @@ import HrIssueCorrectionPanel from "../HrIssueCorrectionPanel";
 import HrRequestWorkbench from "../HrRequestWorkbench";
 import ModuleWorkbench from "../ModuleWorkbench";
 import ReplenishmentPanel from "../ReplenishmentPanel";
+import RetainedPanelSet from "../RetainedPanelSet";
 import ReturnCorrectionPanel from "../ReturnCorrectionPanel";
 import ReturnPanel from "../ReturnPanel";
 
@@ -11,8 +12,12 @@ type Props = { activeModule: string };
 export default function HrWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" id="workspace-module-panel-hr-request-title" role="tabpanel" aria-labelledby="workspace-module-tab-hr-request-title" hidden={activeModule !== "hr-request-title"}>
-        <ModuleWorkbench
+      <RetainedPanelSet
+        idPrefix="workspace-module"
+        activePanelId={activeModule}
+        panelClassName="workspace-section"
+        panels={[
+          { id: "hr-request-title", content: <ModuleWorkbench
           idPrefix="hr-request"
           eyebrow="REQUEST WORKBENCH"
           title="需求與發放準備"
@@ -23,11 +28,8 @@ export default function HrWorkspace({ activeModule }: Props) {
             { id: "replenishment", label: "額外補庫", content: <ReplenishmentPanel /> },
             { id: "return", label: "員工退回", content: <ReturnPanel /> },
           ]}
-        />
-      </section>
-
-      <section className="workspace-section" id="workspace-module-panel-hr-correction-title" role="tabpanel" aria-labelledby="workspace-module-tab-hr-correction-title" hidden={activeModule !== "hr-correction-title"}>
-        <ModuleWorkbench
+        /> },
+          { id: "hr-correction-title", content: <ModuleWorkbench
           idPrefix="hr-correction"
           eyebrow="CORRECTIONS & IMPORT"
           title="人資更正與員工主檔"
@@ -38,8 +40,9 @@ export default function HrWorkspace({ activeModule }: Props) {
             { id: "return-correction", label: "退回更正", content: <ReturnCorrectionPanel /> },
             { id: "employee-import", label: "員工匯入", content: <EmployeeImportPanel /> },
           ]}
-        />
-      </section>
+        /> },
+        ]}
+      />
     </div>
   );
 }

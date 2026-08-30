@@ -2,6 +2,7 @@ import ModuleWorkbench from "../ModuleWorkbench";
 import ProcurementReasonCodePanel from "../ProcurementReasonCodePanel";
 import PurchaseReceiptCorrectionPanel from "../PurchaseReceiptCorrectionPanel";
 import PurchaseReceiptPanel from "../PurchaseReceiptPanel";
+import RetainedPanelSet from "../RetainedPanelSet";
 import SeasonalProcurementPanel from "../SeasonalProcurementPanel";
 
 type Props = { activeModule: string };
@@ -9,8 +10,12 @@ type Props = { activeModule: string };
 export default function ProcurementWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" id="workspace-module-panel-procurement-decision-title" role="tabpanel" aria-labelledby="workspace-module-tab-procurement-decision-title" hidden={activeModule !== "procurement-decision-title"}>
-        <ModuleWorkbench
+      <RetainedPanelSet
+        idPrefix="workspace-module"
+        activePanelId={activeModule}
+        panelClassName="workspace-section"
+        panels={[
+          { id: "procurement-decision-title", content: <ModuleWorkbench
           idPrefix="procurement-decision"
           eyebrow="PURCHASE DECISION"
           title="採購決策與差異"
@@ -20,11 +25,8 @@ export default function ProcurementWorkspace({ activeModule }: Props) {
             { id: "decision", label: "採購決策", content: <SeasonalProcurementPanel /> },
             { id: "reason-codes", label: "差異原因碼", content: <ProcurementReasonCodePanel /> },
           ]}
-        />
-      </section>
-
-      <section className="workspace-section" id="workspace-module-panel-procurement-receipt-title" role="tabpanel" aria-labelledby="workspace-module-tab-procurement-receipt-title" hidden={activeModule !== "procurement-receipt-title"}>
-        <ModuleWorkbench
+        /> },
+          { id: "procurement-receipt-title", content: <ModuleWorkbench
           idPrefix="procurement-receipt"
           eyebrow="RECEIPT POSTING"
           title="採購入庫與更正"
@@ -34,8 +36,9 @@ export default function ProcurementWorkspace({ activeModule }: Props) {
             { id: "receipt", label: "採購入庫", content: <PurchaseReceiptPanel /> },
             { id: "correction", label: "入庫更正", content: <PurchaseReceiptCorrectionPanel /> },
           ]}
-        />
-      </section>
+        /> },
+        ]}
+      />
     </div>
   );
 }

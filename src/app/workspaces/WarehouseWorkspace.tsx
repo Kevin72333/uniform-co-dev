@@ -1,5 +1,6 @@
 import InventoryManagementPanel from "../InventoryManagementPanel";
 import ModuleWorkbench from "../ModuleWorkbench";
+import RetainedPanelSet from "../RetainedPanelSet";
 import StocktakeCorrectionPanel from "../StocktakeCorrectionPanel";
 import StocktakePanel from "../StocktakePanel";
 import WarehouseShipmentPanel from "../WarehouseShipmentPanel";
@@ -11,23 +12,23 @@ type Props = { activeModule: string; onNavigate: (workspaceId: WorkspaceId, anch
 export default function WarehouseWorkspace({ activeModule, onNavigate }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" id="workspace-module-panel-warehouse-inventory-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-inventory-title" hidden={activeModule !== "warehouse-inventory-title"}>
-        <InventoryManagementPanel headingId="warehouse-inventory-title" onNavigate={onNavigate} />
-      </section>
-
-      <section className="workspace-section" id="workspace-module-panel-warehouse-control-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-control-title" hidden={activeModule !== "warehouse-control-title"}>
-        <div className="workspace-section-heading">
-          <div>
-            <p className="eyebrow">FULFILLMENT</p>
-            <h2 id="warehouse-control-title">發貨作業</h2>
-          </div>
-          <p>依需求單處理倉庫發貨；倉庫只填寫實際調庫量，正式庫存異動由受保護 RPC 完成。</p>
-        </div>
-        <WarehouseShipmentPanel />
-      </section>
-
-      <section className="workspace-section" id="workspace-module-panel-warehouse-stocktake-title" role="tabpanel" aria-labelledby="workspace-module-tab-warehouse-stocktake-title" hidden={activeModule !== "warehouse-stocktake-title"}>
-        <ModuleWorkbench
+      <RetainedPanelSet
+        idPrefix="workspace-module"
+        activePanelId={activeModule}
+        panelClassName="workspace-section"
+        panels={[
+          { id: "warehouse-inventory-title", content: <InventoryManagementPanel headingId="warehouse-inventory-title" onNavigate={onNavigate} /> },
+          {
+            id: "warehouse-control-title",
+            content: <>
+              <div className="workspace-section-heading">
+                <div><p className="eyebrow">FULFILLMENT</p><h2 id="warehouse-control-title">發貨作業</h2></div>
+                <p>依需求單處理倉庫發貨；倉庫只填寫實際調庫量，正式庫存異動由受保護 RPC 完成。</p>
+              </div>
+              <WarehouseShipmentPanel />
+            </>,
+          },
+          { id: "warehouse-stocktake-title", content: <ModuleWorkbench
           idPrefix="warehouse-stocktake"
           eyebrow="STOCKTAKE & CORRECTION"
           title="盤點與倉庫更正"
@@ -38,8 +39,9 @@ export default function WarehouseWorkspace({ activeModule, onNavigate }: Props) 
             { id: "transfer-correction", label: "調庫更正", content: <WarehouseTransferCorrectionPanel /> },
             { id: "stocktake-correction", label: "盤點更正", content: <StocktakeCorrectionPanel /> },
           ]}
-        />
-      </section>
+        /> },
+        ]}
+      />
     </div>
   );
 }

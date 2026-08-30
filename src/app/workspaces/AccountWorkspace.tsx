@@ -1,13 +1,17 @@
 import AccountAdminPanel from "../AccountAdminPanel";
+import RetainedPanelSet from "../RetainedPanelSet";
 
 type Props = { activeModule: string };
 
 export default function AccountWorkspace({ activeModule }: Props) {
   return (
     <div className="workspace-sections">
-      <section className="workspace-section" id="workspace-module-panel-accounts-admin-title" role="tabpanel" aria-labelledby="workspace-module-tab-accounts-admin-title" hidden={activeModule !== "accounts-admin-title"}>
-        <AccountAdminPanel headingId="accounts-admin-title" />
-      </section>
+      <RetainedPanelSet
+        idPrefix="workspace-module"
+        activePanelId={activeModule}
+        panelClassName="workspace-section"
+        panels={[{ id: "accounts-admin-title", content: <AccountAdminPanel headingId="accounts-admin-title" /> }]}
+      />
     </div>
   );
 }
