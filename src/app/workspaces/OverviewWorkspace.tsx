@@ -1,6 +1,6 @@
 import DurableImportPanel from "../DurableImportPanel";
-import MasterDataPanel from "../MasterDataPanel";
 import OverviewDashboard from "../OverviewDashboard";
+import OrganizationManagementPanel from "../OrganizationManagementPanel";
 import ProductManagementPanel from "../ProductManagementPanel";
 import RetainedPanelSet from "../RetainedPanelSet";
 import type { WorkspaceId } from "./workspace-config";
@@ -23,7 +23,7 @@ export default function OverviewWorkspace({ activeModule, onNavigate }: Props) {
                 <div><p className="eyebrow">ACCESS &amp; FOUNDATION</p><h2 id="overview-access-title">主檔與資料基礎</h2></div>
                 <p>所有業務工作區共用這裡的機構與部門主檔；商品與供應商資料已集中到商品管理，帳號與角色請至左側帳號管理。</p>
               </div>
-              <MasterDataPanel allowedEntityTypes={["INSTITUTIONS", "DEPARTMENTS"]} />
+              <OrganizationManagementPanel />
             </>,
           },
           {

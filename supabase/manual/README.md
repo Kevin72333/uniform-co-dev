@@ -16,3 +16,10 @@
 ## 本輪模組化管理 SQL
 
 `migrations/0076_inventory_report_export_audit.sql`（或同名 `manual/0076_inventory_report_export_audit.sql`）只需在 `audit_events` 與 `private.append_audit_event` 已存在的資料庫執行一次。它提供庫存管理 CSV 匯出的 metadata 稽核 RPC，不會保存或寫入匯出的資料列。
+
+商品與組織管理清單若要顯示停用資料並支援重新啟用，依序在 Supabase SQL Editor 執行：
+
+1. `migrations/0077_uniform_item_manager_read_inactive.sql`（商品停用品號；若尚未套用）。
+2. `manual/0078_organization_manager_read_inactive.sql`（機構／部門停用資料）。
+
+`0078` 只增加 HR 對停用機構與部門的 `SELECT` 權限；既有角色讀取啟用資料的 RLS 不變，新增、修改、停用仍只能經過 `apply_master_import`。
