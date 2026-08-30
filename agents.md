@@ -8,9 +8,9 @@
 
 ### 接手第一步
 
-這個工作樹目前刻意保留大量未提交修改，包含多輪已完成的功能、安全防線、migration、workflow、測試與文件。接手後先讀本文件，再讀 `README.md`，接著用 `git status --short` 與 `git diff` 確認現況；不要執行 reset／clean、不要用整檔重寫覆蓋既有修改，也不要自行 commit／push。若只做新需求，應在現有修改上做最小 patch。
+`main` 已包含目前完成的功能、安全防線、migration、workflow、測試、System Guide 與文件。接手後先讀本文件，再讀 `README.md`，接著用 `git status --short`、`git diff` 與 `git log -5 --oneline` 確認現況；目前預期只會看到使用者保留的未追蹤 `prototype/`，除非需求明確指向 prototype，否則不要加入提交。使用者已要求每次修改驗證完成後自動推送 GitHub；推送前先 fetch／比較 `origin/main`，只 stage 本次檔案，不執行 reset／clean 或整檔覆寫。
 
-Repository-local 工作目前已收尾，最新完整驗證為：49 個 test files、211/211 tests 通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 沒有 patch whitespace error，只有 Windows 工作樹既有的 LF→CRLF warning。下一位 agent 不應把「找不到新的本機 TODO」解讀為正式上線已完成。
+Repository-local 工作目前已收尾，最新完整驗證為：64 個 test files、263/263 tests 通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 沒有 patch whitespace error，只有 Windows 工作樹既有的 LF→CRLF warning。正式站另以 SYSTEM_ADMIN session 驗證 System Guide 三份文件、原左側導航與頁籤切換，未登入 `/api/system-guide` 回 401。下一位 agent 不應把「找不到新的本機 TODO」解讀為正式上線已完成。
 
 ### 這一輪已落地的重要能力
 
@@ -21,6 +21,7 @@ Repository-local 工作目前已收尾，最新完整驗證為：49 個 test fil
 5. **Error monitoring**：`instrumentation.ts` → `src/server/error-monitoring.ts` 只輸出 allowlisted 結構化欄位與不可逆 fingerprint；`src/app/error.tsx` 只顯示通用錯誤。禁止把 raw message／stack／body／headers／Authorization／cookie／token／query／DB URL 加回 log。外部 provider／alert／incident smoke 尚未取得。
 6. **Capacity gate**：`capacity:plan` 只把假設與實測分開計算，沒有 `STAGING_SYNTHETIC` 三年實測、尖峰負載、完整還原與 quota usage 時必須維持 `NOT_VALIDATED`。不要把 example assumptions 或模型估算升格成 production evidence。
 7. **Production release evidence**：`deployment:release-gate` 集中 17 個 production cutover gate；`deployment:release-evidence` 對 ignored 的正式 evidence 檔做 init／record／block，使用 lock、重讀與原子替換避免 lost update。版本化 `release-evidence.example.json` 永遠保持 `NOT_READY`，不得修改成「全 PASS」示範正式完成。
+8. **SYSTEM_ADMIN System Guide**：`docs/system-guide/` 是使用者、管理者與 AI Agent 三份同源 Markdown；`/system-guide` 使用 `WorkspaceShell initialSystemGuide`，保留原工作區左側導航並在右側顯示文件。文件按鈕來自 `src/domain/system-guide.ts` 的固定 allowlist metadata，不等待 API 才建立；`use-system-guide-access.ts` 只把本人可由 RLS 讀取的 SYSTEM_ADMIN 可見結果快取在目前分頁並背景預取。`GET /api/system-guide` 每次仍以 bearer session、有效 `app_accounts` 與 `authorizeSystemAdmin()` 重新授權；不得把 sessionStorage 或隱藏入口當成安全邊界，也不得改用 `dangerouslySetInnerHTML`。
 
 ### 下一位 agent 的工作界線
 
@@ -32,11 +33,12 @@ Repository-local 工作目前已收尾，最新完整驗證為：49 個 test fil
 
 ### 正式 UI 與功能 seam
 
-- `src/app/WorkspaceShell.tsx`：登入 gate、session refresh、七個 workspace、hash 導航、共用 topbar 與 responsive shell。
+- `src/app/WorkspaceShell.tsx`：登入 gate、session refresh、七個 workspace、hash 導航、共用 topbar、responsive shell，以及保留原左側導航的 `initialSystemGuide` 內嵌模式。
 - `src/app/workspaces/workspace-config.ts`：workspace 定義、功能頁籤與搜尋索引；目前 workspace 為總覽、帳號管理、人資需求、倉庫作業、採購與入庫、換季活動、報表。
 - `src/app/workspaces/*Workspace.tsx`：每個 workspace 的模組組裝；頁籤使用 `activeModule` 切換內容，維持在同一工作區，不用按鈕觸發頁面下移。
 - 商品與庫存模組：`src/app/ProductManagementPanel.tsx` 組合商品清單、單筆新增／修改／停用、主檔小批次匯入／匯出與耐久匯入；`src/app/InventoryManagementPanel.tsx` 組合兩倉可用量、期初匯入、庫存異動入口、庫存／流水 CSV 匯出與規則試算。`ProductMasterEditorPanel` 仍透過 `apply_master_import` 保存，`InventoryOperationHub` 只導向既有期初／發貨／盤點／入庫／更正 seam；商品數量與庫存數字仍分別以既有主檔 RPC、`v_item_availability` 與庫存交易來源為準。
 - `src/app/WorkspaceTopbar.tsx`：搜尋、通知、日期／資料狀態、帳號操作與風格下拉選單。
+- System Guide seam：`src/app/system-guide/page.tsx` 只選擇 `WorkspaceShell initialSystemGuide`；`src/app/system-guide/SystemGuidePageClient.tsx` 顯示右側文件，`src/app/use-system-guide-access.ts` 負責入口顯示與背景預取，`src/app/api/system-guide/route.ts` 與 `src/server/system-guide.ts` 負責最終授權與讀檔。文件檔名、標題與讀者的唯一 allowlist 在 `src/domain/system-guide.ts`。
 - `src/app/AccountAdminPanel.tsx`、`src/app/api/admin/accounts/route.ts`、`src/server/account-admin.ts`：帳號管理模組。2–50 個小寫英數字的登入帳號與至少 6 字元密碼必填，聯絡 Email 選填且不作登入；建立或編輯時可一次管理六角色，並支援需求窗口機構／部門範圍、啟用／停用、Auth 綁定重設／解除與保留業務歷史的刪除。所有操作透過 server-side API、idempotency key、SYSTEM_ADMIN 防線與稽核理由處理。
 - `src/app/use-appearance-theme.ts` 與 `src/app/globals.css`：外觀 adapter seam。下拉選項為 `AP`、`MX`、`GS`、`MB`、`SH`；`GS` 的顯示名稱是 GS，但程式 id／`data-appearance` 仍是 `ga`，不要只為改名而破壞既有 localStorage 或 motion 判斷。`SH` 是 shadcn/ui-inspired neutral token 版本，未加入 shadcn runtime dependency。
 
@@ -50,6 +52,7 @@ Repository-local 工作目前已收尾，最新完整驗證為：49 個 test fil
 6. Storage cleanup 的 eligibility 只能由 `0071_storage_cleanup_contract.sql`／`0072_import_terminal_retention.sql` 的 DB RPC 決定；runner 只能做第二層 bucket/key sanity check。不要在 script／workflow 自行推論可刪狀態、放寬 24 小時下限或 FAILED／CANCELLED import 的 90 天 terminal retention、重設 renderer/import lease，或刪除 artifact／import／audit evidence row。
 7. DB staging payload retention 只走 `0074_import_staging_payload_retention.sql` 的 `job_import_retention` 薄 RPC。它只 scrub FAILED／CANCELLED 滿 90 天 batch 的 `raw_values`／`normalized_values`／`validation_errors`，保留 batch/row/chunk/diff evidence 與 `staging_purged_at`；purge 後不可 restart。不要把 `job_storage_cleanup` 擴權為 DB staging purge worker。
 8. 商品主檔的刪除語意是停用 `isActive=false`，不可刪除已被交易引用的列；庫存管理的修改／刪除語意是修改草稿、取消未過帳工作或建立更正，不能直接 UPDATE／DELETE `inventory_balances` 或 append-only ledger。
+9. System Guide 的入口效能依賴兩層設計：前台只用 RLS self-read `user_roles` 與 `uniform:system-guide-access:<user-id>` sessionStorage key 加速可見性，受保護文件永遠由 API 重新授權。角色撤銷後允許入口短暫存在，但 API 必須拒絕並清除快取；不要把文件內容存進 localStorage/sessionStorage，也不要恢復「首頁 HEAD 後才顯示、獨立頁 GET 後才建立文件按鈕」的雙延遲架構。
 
 ### 已知交接界線
 
@@ -57,13 +60,14 @@ Repository-local 工作目前已收尾，最新完整驗證為：49 個 test fil
 - 鼎新正式格式、正式 PDF 列印樣式與期初真實資料仍待外部資料；Renderer runner、Storage proxy/finalize 與 disposable-staging active smoke harness 已完成，但真實 Storage／RLS／signed URL／並行鎖 staging smoke 仍屬正式驗收事項。
 - 商品／庫存模組的本機 UI、既有 RPC 串接、期初分流與庫存匯出已完成；`0076_inventory_report_export_audit.sql`（手動 SQL 副本在 `supabase/manual/`）仍須由使用者在已具備 `audit_events` 的 Supabase project 執行，並以 HR／WAREHOUSE session 驗證匯出稽核與各操作 RLS。
 - Storage cleanup 的 DB contract、dry-run/execute runner、contract tests 與每日 dry-run workflow 已落地；`0072_import_terminal_retention.sql` 已提供 FAILED／CANCELLED source object 的 90-day DB eligibility，且不刪除 import DB evidence。`0074_import_staging_payload_retention.sql` 的 `job_import_retention` 90-day DB staging payload scrub contract，以及獨立 dry-run/execute runner、preflight 與每日 dry-run workflow 也已落地；runner 只呼叫 0074 薄 RPC，保留 row shell/chunk/diff 並留下 `staging_purged_at`。Storage／DB staging 兩種 destructive 模式仍必須在受保護 staging 以各自 job role 與雙 gate 實際驗收，尚未啟用 destructive cron。
+- System Guide 已在正式站以 SYSTEM_ADMIN session 驗證三份文件、原左側導航、文件頁籤切換與返回總覽；修正後量測為工作區導航後約 37ms 顯示入口、說明外殼後約 32ms 顯示文件按鈕。未登入 API 會回 401；尚未以一個真實的「已登入但非 SYSTEM_ADMIN」正式帳號做瀏覽器 smoke，該情境目前由 server authorization 與 contract tests 保護。
 - 版面基線 commit 為 `3059723`；後續只調整視覺時保留 AP／MX／GS／MB／SH 五套選項與 `uniform:appearance-theme` localStorage key。
 
 ## 先讀什麼
 
 1. 先讀 [`README.md`](./README.md) 的「正式應用接手狀態」、「Prototype 交接狀態」與「尚待提供」。
 2. 再讀 [`CONTEXT.md`](./CONTEXT.md)，掌握業務詞彙與角色名稱。
-3. 要修改正式功能時，依工作範圍讀 `docs/spec/`、`docs/architecture/`、`docs/implementation/roadmap.md`，不要把 prototype 的記憶體資料當成正式資料來源。
+3. 要修改正式功能時，依工作範圍讀 `docs/spec/`、`docs/architecture/`、`docs/implementation/roadmap.md`；要修改 System Guide 時先讀 [`docs/system-guide/README.md`](./docs/system-guide/README.md) 與三份同源文件。不要把 prototype 的記憶體資料當成正式資料來源。
 
 ## 目前工作邊界
 
@@ -145,7 +149,7 @@ git diff --check
 - 需求詳情三段推進與退回補件都能更新清單與工作佇列。
 - 倉庫只有 `人資倉`、`總倉`，機構清單為 24 個現有機構。
 
-正式 Next.js App 另外確認：未登入時只呈現登入視窗；登入後七個 workspace 都能透過左側導航與網址 hash 切換；topbar 搜尋／通知可開啟；每個 workspace 的頁籤是內容切換；風格下拉選單包含 `AP`、`MX`、`GS`、`MB`、`SH`，切換後應寫入 `uniform:appearance-theme` 並在重新整理後保留；帳號管理需由 SYSTEM_ADMIN session 驗證後才可讀寫，且所有操作保留理由與 idempotency key。
+正式 Next.js App 另外確認：未登入時只呈現登入視窗；登入後七個 workspace 都能透過左側導航與網址 hash 切換；topbar 搜尋／通知可開啟；每個 workspace 的頁籤是內容切換；風格下拉選單包含 `AP`、`MX`、`GS`、`MB`、`SH`，切換後應寫入 `uniform:appearance-theme` 並在重新整理後保留；帳號管理需由 SYSTEM_ADMIN session 驗證後才可讀寫，且所有操作保留理由與 idempotency key。SYSTEM_ADMIN 的「系統說明」入口應在首屏附近顯示，`/system-guide` 保留原工作區左側導航且三個文件按鈕不等待內容 API 才出現；未登入 `/api/system-guide` 必須回 401。
 
 ## 已知限制
 
@@ -154,4 +158,4 @@ git diff --check
 - 正式 renderer、Storage、RLS、並行鎖序、匯入 worker 與鼎新格式仍以 migration、domain code、runbook 與 staging smoke 為準。
 - 鼎新正式格式與正式列印樣式仍等待外部樣本，不能用 prototype 的示範 CSV 宣稱完成。
 
-最後更新：2026-08-29。若下一次需求改變倉庫、機構、需求欄位或流程，先更新本文件與 README 的契約，再修改 prototype 或正式功能，最後重新跑驗證清單。
+最後更新：2026-08-30。若下一次需求改變倉庫、機構、需求欄位、流程或 System Guide 的權限／載入架構，先更新本文件與 README 的契約，再修改 prototype 或正式功能，最後重新跑驗證清單。

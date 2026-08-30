@@ -22,7 +22,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 
 ### 2026-08-30 repository-local 收尾快照
 
-目前版本庫內能以程式、migration、測試與文件完成的安全防線已收尾；這不等於 production cutover 已通過。下一位 AI agent 接手時，先保留現有工作樹，不要 reset、clean、整檔覆寫、commit 或 push，除非使用者明確要求。現有未提交修改包含本輪及更早的累積工作。
+目前版本庫內能以程式、migration、測試與文件完成的安全防線已收尾；這不等於 production cutover 已通過。下一位 AI agent 接手時，先讀 [`agents.md`](./agents.md)，再執行 `git status --short` 與 `git log -5 --oneline`。目前 `main` 已包含已完成修改，預期只保留未追蹤 `prototype/`；除非需求明確指向 prototype，否則不要加入提交。使用者已要求每次修改驗證完成後自動推送 GitHub，推送前須 fetch／比較 `origin/main` 並只 stage 本次檔案。
 
 - Durable import 已有真正的背景 worker：`npm run import:worker -- --once` 只跑單輪 claim／處理；移除 `--once` 時會依 `IMPORT_POLL_MS` 持續輪詢 `list_import_work`，接續 PARSE／VALIDATE／APPLY。瀏覽器關閉不會讓耐久 chunk 必然停住；真實常駐 staging 部署仍待驗收。
 - Storage cleanup 已由 `0071_storage_cleanup_contract.sql`／`0072_import_terminal_retention.sql` 提供 DB 權威 eligibility、24 小時下限、FAILED／CANCELLED import 90 天 terminal retention、append-only cleanup audit，以及 fail-closed dry-run／execute runner。每日 workflow 目前只 dry-run；destructive cron 尚未核准啟用。
@@ -38,13 +38,15 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - 庫存管理已集中為兩倉可用量、期初庫存耐久匯入、發貨／盤點／採購入庫／更正操作入口、庫存／流水 CSV 匯出與本機規則試算；`0076_inventory_report_export_audit.sql` 只記錄匯出 metadata，庫存數字仍由流水與 view 推導。
 - 營運報表的九張 security-invoker view 已集中到 `reporting-catalog` 顯示 seam：正式畫面使用對應中文欄名與常用狀態，並支援報表說明、即時搜尋、欄位排序、25／50／100 筆分頁及重新整理；原始 view 欄位與 RLS 不變。維護規則見 [`docs/architecture/reporting-catalog.md`](./docs/architecture/reporting-catalog.md)。
 - `ModuleWorkbench` 已成為正式 UI 的子功能 seam：商品、組織、帳號、庫存、人資需求／更正、倉庫盤點、採購決策／入庫、換季活動與正式文件都使用一致的工具列與任務頁籤。下層 `RetainedPanelSet` 同時管理七個 workspace、workspace module 與工作台子頁籤：預設首次開啟才掛載，之後保留未送出的 panel 狀態，避免未造訪模組在登入時同步查詢 Supabase。完整盤點、mount policy 與不拆分理由見 [`docs/architecture/module-workbench.md`](./docs/architecture/module-workbench.md)。
-- 最新完整本機驗證：62 個 test files、249/249 tests 全數通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 無內容錯誤，僅有既存 LF→CRLF 提示。
+- System Guide 已整合至正式站 [`/system-guide`](https://uniform-co.vercel.app/system-guide)：`SYSTEM_ADMIN` 可在原 `WorkspaceShell` 左側或 topbar 開啟，原工作區導航保留，三份文件顯示在右側。文件按鈕使用固定 allowlist metadata 首屏建立，入口可見性使用本人 RLS `user_roles` 與同分頁 session cache 加速，文件內容仍由受保護 API 每次重新驗證 bearer session、有效帳號與 SYSTEM_ADMIN；頁面只渲染安全 typed blocks，不使用 `dangerouslySetInnerHTML`。同源文件與維護摘要位於 [`docs/system-guide/`](./docs/system-guide/README.md)。
+- 最新完整本機驗證：64 個 test files、263/263 tests 全數通過，`npm run lint`、`npm run typecheck`、`npm run build` 全部成功；`git diff --check` 無內容錯誤，僅有既存 LF→CRLF 提示。正式站另以 SYSTEM_ADMIN session 驗證 System Guide 三份文件、原左側導航與頁籤切換，未登入 `/api/system-guide` 回 401；修正後量測為工作區導航後約 37ms 顯示入口、說明外殼後約 32ms 顯示文件按鈕。
 
 目前正式狀態仍是 **`NOT_READY`**。剩餘項目需要真實外部證據：第一批正式帳號／角色／需求窗口範圍、GitHub／Vercel owner 與 backup owner 移交、鼎新正式 mapping 與成功匯入樣本、正式 PDF 版面核准、Supabase migration／RLS／Auth／Storage／signed URL／並行 smoke、durable import worker 與 renderer 真實 staging integration、Storage destructive cleanup、DB 90-day retention destructive smoke、外部 error monitoring、production-sized DB＋Auth＋Storage 從零還原、RPO／RTO 實測、三年容量實測，以及最後 production cutover approval。
 
 ### 已完成的正式介面
 
 - `WorkspaceShell` 集中處理登入 gate、session refresh、左側工作區導航、網址 hash 切換與共用 topbar；正式工作區為「總覽、帳號管理、人資需求、倉庫作業、採購與入庫、換季活動、報表」七個 workspace。總覽內的「商品管理」集中品號／供應商／MOQ 的新增、修改、停用、匯入與匯出；倉庫作業內的「庫存管理」集中兩倉可用量、期初匯入、異動入口、歷史匯出與規則試算。
+- `WorkspaceShell initialSystemGuide` 也是 System Guide 的正式外殼：`src/app/system-guide/page.tsx` 不建立第二套全頁導航，右側內容由 `src/app/system-guide/SystemGuidePageClient.tsx` 顯示；`src/app/use-system-guide-access.ts` 只負責入口顯示與背景預取，最終權限在 `src/app/api/system-guide/route.ts` 與 `src/server/system-guide.ts`。三份 Markdown 的固定檔名、標題與讀者集中在 `src/domain/system-guide.ts`，前後端共用同一 allowlist。
 - 每個 workspace 的功能由 `src/app/workspaces/*Workspace.tsx` 組裝，模組定義、頁籤名稱與搜尋索引集中在 `src/app/workspaces/workspace-config.ts`；功能頁籤是 tab 切換，不是按鈕把畫面往下捲動。
 - topbar 已包含 workspace 搜尋、通知中心、日期／資料狀態、帳號操作與風格下拉選單；手機版改用工作區下拉選單，桌面版使用左側導航。
 - `AccountAdminPanel` 已獨立在左側「帳號管理」workspace。2–50 個小寫英數字的登入帳號與至少 6 字元密碼必填，聯絡 Email 選填且不作登入用途；建立與編輯時可一次管理多個業務角色（`SYSTEM_ADMIN`、`HR`、`WAREHOUSE`、`PROCUREMENT`、`CEO`、`DEMAND_COORDINATOR`），並支援啟用／停用、需求窗口的機構／部門範圍、Auth 綁定重設／解除，以及保留業務歷史的刪除操作。管理 API 位於 `src/app/api/admin/accounts/route.ts`，server-side 實作位於 `src/server/account-admin.ts`，權限與稽核契約以 `0036_account_role_scope_admin.sql`、`0067_account_admin_profile_and_auth_audit.sql`、`0068_account_login_and_bulk_roles.sql`、`0069_account_login_alphanumeric_only.sql`、`0070_account_login_minimum_two.sql` 為準。
@@ -53,7 +55,7 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 
 ### 正式應用的接手順序
 
-1. 先讀 [`agents.md`](./agents.md) 的「最新 AI 接手快照」，再讀本節與 `CONTEXT.md`；依需求範圍再讀 `docs/spec/`、`docs/architecture/`、`docs/implementation/`。
+1. 先讀 [`agents.md`](./agents.md) 的「最新 AI 接手快照」，再讀本節與 `CONTEXT.md`；依需求範圍再讀 `docs/spec/`、`docs/architecture/`、`docs/implementation/`。若修改前台說明、角色可見性或交接文件，再讀 [`docs/system-guide/README.md`](./docs/system-guide/README.md)。
 2. UI／版面需求先搜尋現有 workspace、panel、theme selector 與 CSS token；功能需求先搜尋對應 domain function、panel 與 migration，再做最小 patch。
 3. 所有帳號、角色與範圍異動都必須經 server-side API／Supabase 受保護 RPC，不能從瀏覽器直接使用 service role 或寫入 Auth 管理資料。
 4. Prototype 與正式 App 是兩個不同驗收面：prototype 只驗證內容與流程；正式功能要驗證 Supabase Auth、RLS、Storage、RPC、並行鎖與 staging smoke。
@@ -78,6 +80,10 @@ Supabase migrations 位於 `supabase/migrations/`：`0001_uniform_foundation.sql
 - [ADR：以期初庫存切換](./docs/adr/0002-cut-over-with-opening-balances.md)
 - [ADR：人資送單預留、倉庫發貨過帳](./docs/adr/0003-reserve-before-warehouse-posting.md)
 - [部署與同步 Runbook](./docs/deployment/runbook.md)
+- [System Guide 索引](./docs/system-guide/README.md)
+- [使用者操作說明](./docs/system-guide/user-guide.md)
+- [管理者設定說明](./docs/system-guide/admin-guide.md)
+- [AI Agent 深入交接說明](./docs/system-guide/agent-guide.md)
 - [AI agent 接手指南](./agents.md)
 
 Durable import worker 的 forward migration 順序為 `0045` → `0046` → `0047` → `0048` → `0056` → `0058` → `0061`：先建立 immutable reference snapshot，再拆分 bounded parse chunks，分離 worker／uploader actor，提供 definitive parser failure 狀態轉換，最後讓受控 `job_import_worker` 確認由使用者上傳的 object（保留原 uploader attribution）並進入解析；`0058` 也會在 worker batch lock 內修復 0046 以前遺留的 oversized PARSE chunk，`0061` 保留單檔 10MB 上限但容納 JSONB chunk envelope 的編碼膨脹。部署時不可只套用 `0045`；完整 SQL/RLS/Storage smoke 仍須在受保護 staging worker 環境執行。
