@@ -1,5 +1,5 @@
 -- Read-only production setup checks.
--- Run this after applying 0068 through 0074 in ascending order.
+-- Run this after applying 0068 through 0075 in ascending order.
 -- This script does not create, alter, delete, or repair migration history.
 -- If the migrations were pasted into Supabase SQL Editor, the first result can
 -- still show MISSING because SQL Editor does not update the migration ledger.
@@ -14,7 +14,8 @@ with expected(version) as (
     ('0071'),
     ('0072'),
     ('0073'),
-    ('0074')
+    ('0074'),
+    ('0075')
 )
 select
   e.version,
@@ -38,6 +39,7 @@ select
   ) as staging_purged_at_column,
   to_regprocedure('public.list_import_staging_retention_candidates(integer)') is not null as retention_list_rpc,
   to_regprocedure('public.purge_import_staging_payload(uuid)') is not null as retention_purge_rpc,
+  to_regprocedure('private.digest(text,text)') is not null as digest_bridge,
   case
     when exists (
       select 1 from information_schema.columns
@@ -53,6 +55,7 @@ select
     )
     and to_regprocedure('public.list_import_staging_retention_candidates(integer)') is not null
     and to_regprocedure('public.purge_import_staging_payload(uuid)') is not null
+    and to_regprocedure('private.digest(text,text)') is not null
     then 'FEATURES PRESENT'
     else 'CHECK: one or more pending migrations did not take effect'
   end as migration_feature_status;

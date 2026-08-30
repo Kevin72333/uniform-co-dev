@@ -2,6 +2,8 @@
 
 這些檔案只供 disposable staging／測試專案使用，所有資料都使用 `DEMO-` 識別碼，不是真實公司資料。不要在 production 執行。
 
+若建立耐久匯入批次時出現 `function digest(text, unknown) does not exist`，先執行 `fix-pgcrypto-digest-search-path.sql`；這是已手動套用舊 migration 的資料庫需要的相容性修正。
+
 ## SQL Editor 順序
 
 1. `seed-demo-warehouses.sql`
