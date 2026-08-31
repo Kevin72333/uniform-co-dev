@@ -11,6 +11,54 @@ export type PurchaseAllocationInput = {
   newOrderQuantity: number;
 };
 
+export type SeasonalProcurementQueueRow = {
+  id: string;
+  itemCode: string;
+  itemName: string;
+  size: string | null;
+  approvedQuantity: number;
+  decisionStatus: "PENDING" | "DECIDED";
+  finalPurchaseQuantity: number | null;
+};
+
+export type SeasonalProcurementSortKey = "item_code" | "item_name" | "approved_quantity" | "decision_status";
+export type SeasonalProcurementSortDirection = "asc" | "desc";
+
+export function filterSeasonalProcurementQueue(
+  rows: readonly SeasonalProcurementQueueRow[],
+  query: string,
+): SeasonalProcurementQueueRow[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase("zh-TW");
+  if (!normalizedQuery) return [...rows];
+  return rows.filter((row) => [
+    row.itemCode,
+    row.itemName,
+    row.size ?? "",
+    row.approvedQuantity,
+    row.decisionStatus,
+    row.finalPurchaseQuantity ?? "",
+  ].join(" ").toLocaleLowerCase("zh-TW").includes(normalizedQuery));
+}
+
+export function sortSeasonalProcurementQueue(
+  rows: readonly SeasonalProcurementQueueRow[],
+  sortKey: SeasonalProcurementSortKey,
+  direction: SeasonalProcurementSortDirection,
+): SeasonalProcurementQueueRow[] {
+  const factor = direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    let result = 0;
+    if (sortKey === "approved_quantity") result = left.approvedQuantity - right.approvedQuantity;
+    else if (sortKey === "decision_status") result = left.decisionStatus.localeCompare(right.decisionStatus, "en");
+    else {
+      const leftValue = sortKey === "item_name" ? left.itemName : left.itemCode;
+      const rightValue = sortKey === "item_name" ? right.itemName : right.itemCode;
+      result = leftValue.localeCompare(rightValue, "zh-TW", { numeric: true, sensitivity: "base" });
+    }
+    return (result || left.id.localeCompare(right.id, "en", { numeric: true })) * factor;
+  });
+}
+
 export type ReceiptInput = {
   deliveredQuantity: number;
   acceptedQuantity: number;

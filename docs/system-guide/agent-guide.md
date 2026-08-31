@@ -39,7 +39,7 @@ Durable import / PDF / ERP / Storage cleanup / retention
 
 `workspaceDefinitions` 集中工作區、模組與搜尋索引；`WorkspaceShell` 管理 hash navigation、登入 gate、responsive shell 與 workspace mounting。`RetainedPanelSet` 預設使用 `visited` mount：未造訪 panel 不查詢，造訪後切換仍保留表單狀態。`ModuleWorkbench` 是同一模組內的任務頁籤 seam。
 
-`ManagementCatalogTable` 是帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼、更正歷史與 CEO 待核版本的共用 interface：呼叫端提供 rows 與欄位定義，implementation 集中欄位顯示、密度、每頁筆數、範圍與首末頁導覽；純 page／column 規則在 `management-catalog.ts`。`CorrectionHistoryTable` 再以 `correction-history.ts` 的狀態／搜尋／排序 domain 規則組合五個更正 panel 的唯讀歷史；CEO 清單以 `seasonal-approval.ts` 集中活動／revision／送核時間／hash 搜尋與排序，再把選取結果交回原審核 panel。動態報表可用 absolute row index 補足沒有自然 key 的列，但資料查詢、RLS、匯出稽核與 mutation 不得搬進這些 UI module。
+`ManagementCatalogTable` 是帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼、更正歷史、CEO 待核版本與換季採購決策品項的共用 interface：呼叫端提供 rows 與欄位定義，implementation 集中欄位顯示、密度、每頁筆數、範圍與首末頁導覽；純 page／column 規則在 `management-catalog.ts`。`CorrectionHistoryTable` 再以 `correction-history.ts` 的狀態／搜尋／排序 domain 規則組合五個更正 panel 的唯讀歷史；CEO 清單以 `seasonal-approval.ts` 集中活動／revision／送核時間／hash 搜尋與排序，採購清單以 `seasonal-procurement.ts` 集中品號／品名／數量／決策狀態搜尋與排序，再把選取結果交回各自 panel。動態報表可用 absolute row index 補足沒有自然 key 的列，但資料查詢、RLS、匯出稽核與 mutation 不得搬進這些 UI module。
 
 七個正式工作區：
 
@@ -64,6 +64,7 @@ Durable import / PDF / ERP / Storage cleanup / retention
 - 報表：`ReportingPanel` 只讀 `0063` 起的 security-invoker views，中文欄位 metadata 在 `reporting-catalog.ts`。
 - 更正歷史：`CorrectionHistoryTable`／`correction-history.ts` 共用人資發放、退回、盤點、倉庫調撥與採購入庫五個 panel 的唯讀歷史瀏覽；各 panel 保留來源查詢、有效數量計算與 draft／POST RPC，adapter 不得加入直接 UPDATE／DELETE 或 bulk mutation。
 - CEO 換季審核：`SeasonalApprovalPanel` 以 `seasonal-approval.ts` 將 PENDING submission 映射成可搜尋／排序／分頁的待核版本清單；選取只改變明細載入目標，核准／退回仍保留 revision/hash 重驗、idempotency 與 `review_seasonal_submission` RPC。
+- 換季採購決策：`SeasonalProcurementPanel` 以 `seasonal-procurement.ts` 將 APPROVED line 映射成可搜尋／排序／分頁的品項清單，顯示待決策／已完成與最終採購量；選取只改變右側工作區，供應商／MOQ／差異原因與保存仍由原 panel 走 `set_seasonal_procurement_line`，採購單仍走 `create_purchase_order`。
 
 ## 4. 核心領域不變條件
 
@@ -168,7 +169,7 @@ node -e "const fs=require('fs'),vm=require('vm'); const h=fs.readFileSync('proto
 - 員工主檔獨立模組、完整單筆表單、停用、匯入與稽核匯出。
 - 營運報表中文欄位、搜尋、排序、分頁與即時刷新。
 - 組織主檔與商品管理的清單／表單／匯入匯出深模組。
-- 帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼、五種更正歷史與 CEO 待核版本共用管理清單的欄位顯示、密度、每頁筆數與完整分頁；更正歷史另提供單號／原因搜尋與狀態篩選，CEO 清單提供活動／revision／snapshot hash 搜尋與送核時間排序。
+- 帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼、五種更正歷史、CEO 待核版本與換季採購決策品項共用管理清單的欄位顯示、密度、每頁筆數與完整分頁；更正歷史另提供單號／原因搜尋與狀態篩選，CEO 清單提供活動／revision／snapshot hash 搜尋與送核時間排序，採購清單提供品號／品名／數量／決策狀態搜尋與排序。
 - Workspace／ModuleWorkbench visited mount，避免登入後 eager 查詢。
 - 庫存管理整合兩倉可用量、期初、操作入口與歷史匯出。
 

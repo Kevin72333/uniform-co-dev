@@ -26,12 +26,12 @@
 
 ## 產出驗證
 
-- `npm test`：69 個 test files、279/279 tests 通過。
+- `npm test`：69 個 test files、281/281 tests 通過。
 - `npm run lint`、`npm run typecheck`、`npm run build`：通過。
 - Next.js build trace 已包含三份前台 Markdown；`/api/system-guide` 為動態路由，`/system-guide` 與首頁共用正式工作區外殼。
 - Prototype JavaScript syntax smoke 與 `git diff --check`：通過。
 - 本功能沿用既有角色與 Supabase session，不需要新增或執行 Supabase SQL migration。
-- 帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼、五種更正歷史與 CEO 待核版本的共用管理清單已包含欄位顯示、密度、每頁筆數與首末頁導覽；更正歷史支援單號／原因搜尋與狀態篩選，CEO 清單支援活動／revision／snapshot hash 搜尋與送核時間排序；這些顯示設定不改資料或匯出集合。
+- 帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼、五種更正歷史、CEO 待核版本與換季採購決策品項的共用管理清單已包含欄位顯示、密度、每頁筆數與首末頁導覽；更正歷史支援單號／原因搜尋與狀態篩選，CEO 清單支援活動／revision／snapshot hash 搜尋與送核時間排序，採購清單支援品號／品名／數量／決策狀態搜尋；這些顯示設定不改資料或匯出集合。
 
 ## 已知未知資訊
 

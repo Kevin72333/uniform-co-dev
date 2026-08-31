@@ -1,14 +1,34 @@
 import { describe, expect, it } from "vitest";
 import {
   assertPurchaseAllocationWithinLimit,
+  filterSeasonalProcurementQueue,
   SeasonalProcurementValidationError,
+  sortSeasonalProcurementQueue,
   summarizeReceiptProgress,
   validatePurchaseDecision,
   validateReceipt,
   validateReceiptDraft,
 } from "./seasonal-procurement";
 
+const procurementRows = [
+  { id: "2", itemCode: "U-002", itemName: "長袖上衣", size: "L", approvedQuantity: 20, decisionStatus: "DECIDED" as const, finalPurchaseQuantity: 24 },
+  { id: "1", itemCode: "U-001", itemName: "短袖上衣", size: "M", approvedQuantity: 120, decisionStatus: "PENDING" as const, finalPurchaseQuantity: null },
+];
+
 describe("seasonal procurement rules", () => {
+  it("filters approved items by identity, quantity and decision status without mutating rows", () => {
+    expect(filterSeasonalProcurementQueue(procurementRows, "長袖").map((row) => row.id)).toEqual(["2"]);
+    expect(filterSeasonalProcurementQueue(procurementRows, "120").map((row) => row.id)).toEqual(["1"]);
+    expect(filterSeasonalProcurementQueue(procurementRows, "PENDING").map((row) => row.id)).toEqual(["1"]);
+    expect(procurementRows.map((row) => row.id)).toEqual(["2", "1"]);
+  });
+
+  it("sorts approved quantity numerically and keeps the source rows unchanged", () => {
+    expect(sortSeasonalProcurementQueue(procurementRows, "approved_quantity", "asc").map((row) => row.approvedQuantity)).toEqual([20, 120]);
+    expect(sortSeasonalProcurementQueue(procurementRows, "approved_quantity", "desc").map((row) => row.approvedQuantity)).toEqual([120, 20]);
+    expect(procurementRows.map((row) => row.approvedQuantity)).toEqual([20, 120]);
+  });
+
   it("requires a reason when MOQ changes the approved quantity", () => {
     expect(() =>
       validatePurchaseDecision({

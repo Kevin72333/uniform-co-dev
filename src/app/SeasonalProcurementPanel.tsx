@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import ManagementCatalogTable, { type ManagementCatalogColumn } from "@/src/app/ManagementCatalogTable";
+import { filterSeasonalProcurementQueue, sortSeasonalProcurementQueue, type SeasonalProcurementQueueRow, type SeasonalProcurementSortDirection, type SeasonalProcurementSortKey } from "@/src/domain/seasonal-procurement";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
 type ApprovalLine = {
@@ -41,6 +43,10 @@ export default function SeasonalProcurementPanel() {
   const [currency, setCurrency] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [taxRate, setTaxRate] = useState("");
+  const [queueQuery, setQueueQuery] = useState("");
+  const [queuePage, setQueuePage] = useState(1);
+  const [queueSortKey, setQueueSortKey] = useState<SeasonalProcurementSortKey>("item_code");
+  const [queueSortDirection, setQueueSortDirection] = useState<SeasonalProcurementSortDirection>("asc");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const decisionKeyRef = useRef<string | null>(null);
@@ -54,6 +60,20 @@ export default function SeasonalProcurementPanel() {
   const selectedRelation = availableSuppliers.find((relation) => relation.supplier_id === supplierId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId);
   const existingDecision = procurementLines.find((line) => line.approval_line_id === lineId);
+  const queueRows: SeasonalProcurementQueueRow[] = useMemo(() => lines.map((line) => {
+    const decision = procurementLines.find((row) => row.approval_line_id === line.id);
+    return {
+      id: line.id,
+      itemCode: line.item_code_snapshot,
+      itemName: line.item_name_snapshot,
+      size: line.size_snapshot,
+      approvedQuantity: line.approved_quantity,
+      decisionStatus: decision ? "DECIDED" : "PENDING",
+      finalPurchaseQuantity: decision?.final_purchase_quantity ?? null,
+    };
+  }), [lines, procurementLines]);
+  const filteredQueueRows = useMemo(() => filterSeasonalProcurementQueue(queueRows, queueQuery), [queueQuery, queueRows]);
+  const sortedQueueRows = useMemo(() => sortSeasonalProcurementQueue(filteredQueueRows, queueSortKey, queueSortDirection), [filteredQueueRows, queueSortDirection, queueSortKey]);
 
   useEffect(() => {
     if (!client) return;
@@ -114,6 +134,20 @@ export default function SeasonalProcurementPanel() {
     setFinalQuantity(existing?.final_purchase_quantity ?? nextLine.approved_quantity);
     setOrderedQuantity(existing?.final_purchase_quantity ?? nextLine.approved_quantity);
     setProcurementId(existing?.id ?? "");
+    setDifferenceReason("");
+    setNote("");
+    setPoNo("");
+    setExpectedArrivalDate("");
+    setUnitPrice("");
+    setTaxRate("");
+    setMessage("");
+    setQueuePage(1);
+  }
+
+  function sortQueue(nextKey: SeasonalProcurementSortKey) {
+    if (queueSortKey === nextKey) setQueueSortDirection((current) => current === "asc" ? "desc" : "asc");
+    else { setQueueSortKey(nextKey); setQueueSortDirection("asc"); }
+    setQueuePage(1);
   }
 
   async function saveDecision() {
@@ -159,7 +193,36 @@ export default function SeasonalProcurementPanel() {
   return <section className="panel import-panel" aria-label="換季採購決策">
     <div className="panel-heading"><div><p className="eyebrow">11 / PROCUREMENT</p><h2>換季採購決策</h2></div><span className="status-pill">核准後採購</span></div>
     <p className="auth-message">採購量由核准版本起算；供應商 MOQ、差異理由與採購單欄位會由資料庫 RPC 再次驗證，已保存的原始採購決策不可直接覆寫。</p>
-    <div className="form-grid">
+    <div className="seasonal-procurement-workspace">
+      <div className="seasonal-procurement-queue">
+        <div className="subheading"><h3>CEO 核准品項</h3><span>搜尋品號、品名、尺寸、數量或決策狀態，再按「選取」載入右側工作區</span></div>
+        <div className="management-catalog-filters seasonal-procurement-filters"><label className="field"><span>搜尋核准品項</span><input value={queueQuery} onChange={(event) => { setQueueQuery(event.target.value); setQueuePage(1); }} placeholder="品號、品名、尺寸或 PENDING" /></label></div>
+        <div className="management-catalog-result"><p className="muted" aria-live="polite">符合條件 {sortedQueueRows.length} 筆</p>{queueQuery ? <button className="text-button" type="button" onClick={() => { setQueueQuery(""); setQueuePage(1); }}>清除搜尋</button> : null}</div>
+        <ManagementCatalogTable
+          ariaLabel="CEO 核准品項"
+          rows={sortedQueueRows}
+          rowKey={(row) => row.id}
+          columns={[
+            { id: "item", label: "品號／品名", sortKey: "item_code", locked: true, render: (row) => <strong>{row.itemCode}｜{row.itemName}{row.size ? `｜${row.size}` : ""}</strong> },
+            { id: "approved", label: "核准量", sortKey: "approved_quantity", render: (row) => row.approvedQuantity },
+            { id: "decision", label: "決策狀態", sortKey: "decision_status", render: (row) => <span className={`status-pill ${row.decisionStatus === "DECIDED" ? "success" : ""}`}>{row.decisionStatus === "DECIDED" ? "已完成" : "待決策"}</span> },
+            { id: "final", label: "最終採購量", defaultVisible: false, render: (row) => row.finalPurchaseQuantity ?? "—" },
+            { id: "action", label: "功能", locked: true, render: (row) => <button className="management-row-action" type="button" onClick={() => selectApprovalLine(row.id)} disabled={busy}>{row.id === lineId ? "目前已選取" : "選取"}</button> },
+          ] satisfies readonly ManagementCatalogColumn<SeasonalProcurementQueueRow, SeasonalProcurementSortKey>[]}
+          page={queuePage}
+          onPageChange={setQueuePage}
+          sortKey={queueSortKey}
+          sortDirection={queueSortDirection}
+          onSort={sortQueue}
+          defaultPageSize={10}
+          pageSizeOptions={[5, 10, 25, 50]}
+          emptyState={<p className="empty-state">{queueRows.length === 0 ? "目前沒有可採購的 CEO 核准品項。" : "沒有符合搜尋的核准品項。"}</p>}
+          tableClassName="seasonal-procurement-table"
+        />
+      </div>
+      <div className="seasonal-procurement-review">
+        <div className="subheading"><h3>採購決策工作區</h3><span>原始核准量與 MOQ 快照保存後不可覆寫</span></div>
+        <div className="form-grid">
       <label className="field"><span>CEO 核准品項</span><select value={lineId} onChange={(event) => selectApprovalLine(event.target.value)} disabled={busy}><option value="">請選擇</option>{lines.map((line) => <option key={line.id} value={line.id}>{line.item_code_snapshot}｜{line.item_name_snapshot}{line.size_snapshot ? `｜${line.size_snapshot}` : ""}（核准 {line.approved_quantity}）</option>)}</select></label>
       <label className="field"><span>供應商</span><select value={supplierId} onChange={(event) => { const nextSupplierId = event.target.value; resetDecisionKey(); setSupplierId(nextSupplierId); setCurrency(suppliers.find((supplier) => supplier.id === nextSupplierId)?.default_currency ?? ""); }} disabled={busy || Boolean(existingDecision)}><option value="">請選擇</option>{availableSuppliers.map((relation) => { const supplier = suppliers.find((row) => row.id === relation.supplier_id); return <option key={relation.supplier_id} value={relation.supplier_id}>{supplier?.supplier_code}｜{supplier?.name}（MOQ {relation.minimum_order_quantity ?? "未設定"}）</option>; })}</select></label>
       <label className="field"><span>最終採購量</span><input type="number" min={0} max={999999999} value={finalQuantity} onChange={(event) => { resetDecisionKey(); setFinalQuantity(Math.max(0, Number(event.target.value) || 0)); }} disabled={busy || Boolean(existingDecision)} /></label>
@@ -183,5 +246,7 @@ export default function SeasonalProcurementPanel() {
       </div>
     </> : null}
     {message ? <p className={message.startsWith("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}
+      </div>
+    </div>
   </section>;
 }
