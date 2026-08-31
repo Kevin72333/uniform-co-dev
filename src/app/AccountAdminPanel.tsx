@@ -1,8 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  filterAccountDirectory,
+  sortAccountDirectory,
+  type AccountDirectoryRecord,
+  type AccountDirectorySortDirection,
+  type AccountDirectorySortKey,
+  type AccountDirectoryStatusFilter,
+} from "@/src/domain/account-directory";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 import { validateAccountCreation } from "@/src/lib/account-admin-form";
+import ManagementCatalogTable from "./ManagementCatalogTable";
 import { ModuleWorkbenchNavigation } from "./ModuleWorkbench";
 
 type Account = { id: string; auth_user_id: string | null; login_name: string | null; display_name: string; email_snapshot: string | null; is_active: boolean };
@@ -49,7 +58,10 @@ export default function AccountAdminPanel({ headingId }: Props) {
   const [busy, setBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<AccountAdminTab>("directory");
   const [accountQuery, setAccountQuery] = useState("");
-  const [accountStatus, setAccountStatus] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [accountStatus, setAccountStatus] = useState<AccountDirectoryStatusFilter>("ALL");
+  const [accountSortKey, setAccountSortKey] = useState<AccountDirectorySortKey>("display_name");
+  const [accountSortDirection, setAccountSortDirection] = useState<AccountDirectorySortDirection>("asc");
+  const [accountPage, setAccountPage] = useState(1);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const operationRefs = useRef<Record<string, string>>({});
 
@@ -57,15 +69,19 @@ export default function AccountAdminPanel({ headingId }: Props) {
   const selectedRoles = useMemo(() => roleRows.filter((row) => row.account_id === selectedId).map((row) => row.role_code), [roleRows, selectedId]);
   const selectedScopes = useMemo(() => scopeRows.filter((row) => row.account_id === selectedId), [scopeRows, selectedId]);
   const filteredDepartments = departments.filter((department) => department.institution_id === institutionId);
-  const filteredAccounts = useMemo(() => {
-    const query = accountQuery.trim().toLocaleLowerCase();
-    return accounts.filter((account) => {
-      if (accountStatus === "ACTIVE" && !account.is_active) return false;
-      if (accountStatus === "INACTIVE" && account.is_active) return false;
-      if (!query) return true;
-      return `${account.login_name ?? ""} ${account.display_name} ${account.email_snapshot ?? ""}`.toLocaleLowerCase().includes(query);
-    });
-  }, [accountQuery, accountStatus, accounts]);
+  const accountDirectoryRows = useMemo<AccountDirectoryRecord[]>(() => accounts.map((account) => ({
+    id: account.id,
+    loginName: account.login_name ?? "",
+    displayName: account.display_name,
+    email: account.email_snapshot ?? "",
+    isActive: account.is_active,
+    authBound: Boolean(account.auth_user_id),
+    roles: roleRows.filter((row) => row.account_id === account.id).map((row) => row.role_code),
+  })), [accounts, roleRows]);
+  const filteredAccounts = useMemo(
+    () => sortAccountDirectory(filterAccountDirectory(accountDirectoryRows, accountQuery, accountStatus), accountSortKey, accountSortDirection),
+    [accountDirectoryRows, accountQuery, accountSortDirection, accountSortKey, accountStatus],
+  );
 
   const fetchData = useCallback(async () => {
     if (!client) return null;
@@ -150,6 +166,20 @@ export default function AccountAdminPanel({ headingId }: Props) {
     resetOperation("delete");
     resetOperation("scope");
     resetOperation("rebind");
+  }
+
+  function selectAccountById(accountId: string) {
+    const account = accounts.find((candidate) => candidate.id === accountId);
+    if (account) selectAccount(account);
+  }
+
+  function toggleAccountSort(nextKey: AccountDirectorySortKey) {
+    if (accountSortKey === nextKey) setAccountSortDirection((direction) => direction === "asc" ? "desc" : "asc");
+    else {
+      setAccountSortKey(nextKey);
+      setAccountSortDirection("asc");
+    }
+    setAccountPage(1);
   }
 
   async function runOperation(payload: OperationPayload, operationName: string): Promise<OperationResult | null> {
@@ -309,15 +339,32 @@ export default function AccountAdminPanel({ headingId }: Props) {
       <div className="subheading"><h3>現有業務帳號</h3><span>已載入 {accounts.length} 筆</span></div>
       <p className="muted">這裡列出已建立 `app_accounts` 並受角色／RLS 管理的正式帳號；只存在 Supabase Authentication、尚未建立業務帳號的登入身份不會出現在此清單。</p>
       <div className="account-directory-filters">
-        <label className="field"><span>搜尋帳號</span><input value={accountQuery} onChange={(event) => setAccountQuery(event.target.value)} placeholder="登入帳號、名稱或聯絡 Email…" /></label>
-        <label className="field"><span>帳號狀態</span><select value={accountStatus} onChange={(event) => setAccountStatus(event.target.value as typeof accountStatus)}><option value="ALL">全部狀態</option><option value="ACTIVE">啟用</option><option value="INACTIVE">停用</option></select></label>
+        <label className="field"><span>搜尋帳號／角色</span><input value={accountQuery} onChange={(event) => { setAccountQuery(event.target.value); setAccountPage(1); }} placeholder="登入帳號、名稱、Email 或角色…" /></label>
+        <label className="field"><span>帳號狀態</span><select value={accountStatus} onChange={(event) => { setAccountStatus(event.target.value as AccountDirectoryStatusFilter); setAccountPage(1); }}><option value="ALL">全部狀態</option><option value="ACTIVE">啟用</option><option value="INACTIVE">停用</option></select></label>
       </div>
-      <div className="summary-list account-directory-list">
-        {filteredAccounts.length === 0 ? <p className="empty-state">目前沒有符合條件的業務帳號，或目前登入者沒有 SYSTEM_ADMIN 讀取權限。</p> : null}
-        {filteredAccounts.map((account) => <button className={`admin-account-row ${account.id === selectedId ? "selected" : ""}`} type="button" key={account.id} onClick={() => selectAccount(account)}>
-          <span><strong>{account.display_name}</strong><small>帳號：{account.login_name ?? "舊版 Email 登入"}／{account.email_snapshot ?? "未填聯絡 Email"}／{account.is_active ? "啟用" : "停用"}／{account.auth_user_id ? "已綁定登入" : "未綁定登入"}</small></span><span className="status-pill">{selectedId === account.id ? "已選" : "管理"}</span>
-        </button>)}
-      </div>
+      <div className="management-catalog-result account-directory-result"><p className="muted">符合條件 {filteredAccounts.length} 筆</p>{accountQuery || accountStatus !== "ALL" ? <button className="text-button" type="button" onClick={() => { setAccountQuery(""); setAccountStatus("ALL"); setAccountPage(1); }}>清除篩選</button> : null}</div>
+      <ManagementCatalogTable<AccountDirectoryRecord, AccountDirectorySortKey>
+        ariaLabel="業務帳號清單"
+        rows={filteredAccounts}
+        rowKey={(row) => row.id}
+        page={accountPage}
+        onPageChange={setAccountPage}
+        sortKey={accountSortKey}
+        sortDirection={accountSortDirection}
+        onSort={toggleAccountSort}
+        defaultPageSize={10}
+        pageSizeOptions={[10, 25, 50]}
+        emptyState={<p className="empty-state">目前沒有符合條件的業務帳號，或目前登入者沒有 SYSTEM_ADMIN 讀取權限。</p>}
+        columns={[
+          { id: "display-name", label: "顯示名稱", sortKey: "display_name", locked: true, render: (account) => <strong>{account.displayName}</strong> },
+          { id: "login-name", label: "登入帳號", sortKey: "login_name", render: (account) => account.loginName || "舊版 Email 登入" },
+          { id: "roles", label: "角色", sortKey: "roles", render: (account) => account.roles.length > 0 ? account.roles.join("、") : "尚未指派" },
+          { id: "email", label: "聯絡 Email", render: (account) => account.email || <span className="muted">未填寫</span> },
+          { id: "status", label: "狀態", sortKey: "status", render: (account) => <span className={`status-pill ${account.isActive ? "success" : "danger"}`}>{account.isActive ? "啟用" : "停用"}</span> },
+          { id: "auth", label: "登入綁定", sortKey: "auth", defaultVisible: false, render: (account) => account.authBound ? "已綁定登入" : "未綁定登入" },
+          { id: "actions", label: "功能", locked: true, render: (account) => <button className="management-row-action" type="button" onClick={() => selectAccountById(account.id)}>{selectedId === account.id ? "編輯中" : "管理"}</button> },
+        ]}
+      />
     </div>
     <div id="account-admin-panel-create" role="tabpanel" aria-labelledby="account-admin-tab-create" hidden={activeTab !== "create"}>
     <div className="subheading account-create-heading"><h3>新增帳號</h3><span>帳號、密碼、角色與理由完成後送出</span></div>

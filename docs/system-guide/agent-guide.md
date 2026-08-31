@@ -39,7 +39,7 @@ Durable import / PDF / ERP / Storage cleanup / retention
 
 `workspaceDefinitions` 集中工作區、模組與搜尋索引；`WorkspaceShell` 管理 hash navigation、登入 gate、responsive shell 與 workspace mounting。`RetainedPanelSet` 預設使用 `visited` mount：未造訪 panel 不查詢，造訪後切換仍保留表單狀態。`ModuleWorkbench` 是同一模組內的任務頁籤 seam。
 
-`ManagementCatalogTable` 是商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼的共用 interface：呼叫端提供 rows 與欄位定義，implementation 集中欄位顯示、密度、每頁筆數、範圍與首末頁導覽；純 page／column 規則在 `management-catalog.ts`。動態報表可用 absolute row index 補足沒有自然 key 的列，但資料查詢、RLS、匯出稽核與 mutation 不得搬進這個 UI module。
+`ManagementCatalogTable` 是帳號、商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼的共用 interface：呼叫端提供 rows 與欄位定義，implementation 集中欄位顯示、密度、每頁筆數、範圍與首末頁導覽；純 page／column 規則在 `management-catalog.ts`。動態報表可用 absolute row index 補足沒有自然 key 的列，但資料查詢、RLS、匯出稽核與 mutation 不得搬進這個 UI module。
 
 七個正式工作區：
 
@@ -59,6 +59,7 @@ Durable import / PDF / ERP / Storage cleanup / retention
 - 組織：`OrganizationManagementPanel`／catalog／editor／`organization-management.ts`。
 - 員工：`EmployeeManagementPanel`／catalog／editor／`employee-management.ts`，單筆保存由 migration `0079` 的 HR-only RPC 處理。
 - 庫存：`InventoryManagementPanel` 組合 availability、opening import、operation hub、history export 與 calculator；`inventory-availability.ts` 集中篩選／排序語意，清單使用 `ManagementCatalogTable`，不得直接 DML balance。
+- 帳號：`AccountAdminPanel` 的目錄使用 `account-directory.ts` 篩選／排序與 `ManagementCatalogTable`；「管理」只選取資料，所有真正異動仍走 `/api/admin/accounts` 的 server-side authorization、冪等鍵與稽核理由。
 - 採購差異原因碼：`ProcurementReasonCodePanel` 分離清單與新增／修改模式，查詢排序在 `procurement-reason-management.ts`；代碼編輯時鎖定，保存仍只走 `maintain_procurement_difference_reason`。
 - 報表：`ReportingPanel` 只讀 `0063` 起的 security-invoker views，中文欄位 metadata 在 `reporting-catalog.ts`。
 
@@ -165,7 +166,7 @@ node -e "const fs=require('fs'),vm=require('vm'); const h=fs.readFileSync('proto
 - 員工主檔獨立模組、完整單筆表單、停用、匯入與稽核匯出。
 - 營運報表中文欄位、搜尋、排序、分頁與即時刷新。
 - 組織主檔與商品管理的清單／表單／匯入匯出深模組。
-- 商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼共用管理清單的欄位顯示、密度、每頁筆數與完整分頁。
+- 帳號、商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼共用管理清單的欄位顯示、密度、每頁筆數與完整分頁。
 - Workspace／ModuleWorkbench visited mount，避免登入後 eager 查詢。
 - 庫存管理整合兩倉可用量、期初、操作入口與歷史匯出。
 
