@@ -26,7 +26,7 @@
 
 ## 產出驗證
 
-- `npm test`：66 個 test files、270/270 tests 通過。
+- `npm test`：67 個 test files、272/272 tests 通過。
 - `npm run lint`、`npm run typecheck`、`npm run build`：通過。
 - Next.js build trace 已包含三份前台 Markdown；`/api/system-guide` 為動態路由，`/system-guide` 與首頁共用正式工作區外殼。
 - Prototype JavaScript syntax smoke 與 `git diff --check`：通過。

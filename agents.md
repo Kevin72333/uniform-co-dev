@@ -10,7 +10,7 @@
 
 `main` 已包含目前完成的功能、安全防線、migration、workflow、測試、System Guide 與文件。接手後先讀本文件，再讀 `README.md`，接著用 `git status --short`、`git diff` 與 `git log -5 --oneline` 確認現況；目前預期只會看到使用者保留的未追蹤 `prototype/`，除非需求明確指向 prototype，否則不要加入提交。使用者已要求每次修改驗證完成後自動推送 GitHub；推送前先 fetch／比較 `origin/main`，只 stage 本次檔案，不執行 reset／clean 或整檔覆寫。
 
-Repository-local 最新完整驗證為：66 個 test files、270/270 tests 通過，`npm run lint`、`npm run typecheck`、`npm run build` 與 System Guide parser tests 全部成功；`git diff --check` 沒有內容錯誤。推送後仍需補正式站 read-only UI smoke。下一位 agent 不應把「找不到新的本機 TODO」或本機驗證成功解讀為正式上線已完成。
+Repository-local 最新完整驗證為：67 個 test files、272/272 tests 通過，`npm run lint`、`npm run typecheck`、`npm run build` 與 System Guide parser tests 全部成功；`git diff --check` 沒有內容錯誤。推送後仍需補正式站 read-only UI smoke。下一位 agent 不應把「找不到新的本機 TODO」或本機驗證成功解讀為正式上線已完成。
 
 ### 這一輪已落地的重要能力
 
