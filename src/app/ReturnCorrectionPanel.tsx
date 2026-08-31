@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import CorrectionHistoryTable from "@/src/app/CorrectionHistoryTable";
+import type { CorrectionHistoryRow } from "@/src/domain/correction-history";
 import { validateReturnCorrectionInput } from "@/src/domain/return-correction";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 
 type ReturnNote = { id: string; return_no: string; original_hr_request_id: string; status: "DRAFT" | "POSTED" };
 type ReturnLine = { id: string; return_note_id: string; original_issue_line_id: string; employee_no_snapshot: string | null; employee_name_snapshot: string | null; item_code_snapshot: string | null; item_name_snapshot: string | null; quantity: number; unit_snapshot: string | null };
 type Correction = { id: string; correction_no: string; status: "DRAFT" | "POSTED"; original_return_note_id: string };
-type History = { id: string; correction_no: string; status: string; reason: string; delta: number };
+type History = { id: string; correction_no: string; status: string; reason: string; delta: number; posted_at: string | null };
 
 const STORAGE_PREFIX = "uniform:return-correction";
 
@@ -29,6 +31,14 @@ export default function ReturnCorrectionPanel() {
   const recoveredLineIdRef = useRef<string | null>(null);
   const selectedLine = useMemo(() => lines.find((line) => line.id === lineId), [lines, lineId]);
   const validationError = validateReturnCorrectionInput({ returnQuantityDelta: delta, reason });
+  const historyRows: CorrectionHistoryRow[] = useMemo(() => history.map((row) => ({
+    id: row.id,
+    correctionNo: row.correction_no,
+    status: row.status,
+    reason: row.reason,
+    deltaText: String(row.delta),
+    postedAt: row.posted_at,
+  })), [history]);
 
   useEffect(() => {
     if (!client) return;
@@ -98,10 +108,10 @@ export default function ReturnCorrectionPanel() {
     let active = true;
     async function loadHistory() {
       const { data: notes } = await supabase.from("correction_notes")
-        .select("id,correction_no,status,reason")
+        .select("id,correction_no,status,reason,posted_at")
         .eq("original_return_note_id", sourceLine.return_note_id).order("id", { ascending: false });
       if (!active) return;
-      const noteRows = (notes ?? []) as Array<{ id: string; correction_no: string; status: string; reason: string }>;
+      const noteRows = (notes ?? []) as Array<{ id: string; correction_no: string; status: string; reason: string; posted_at: string | null }>;
       const ids = noteRows.map((row) => row.id);
       if (ids.length === 0) { setHistory([]); return; }
       const { data: correctionLines } = await supabase.from("return_correction_lines")
@@ -113,7 +123,7 @@ export default function ReturnCorrectionPanel() {
         .map((line) => [String(line.correction_note_id), line]));
       setHistory(noteRows.filter((row) => byNote.has(row.id)).map((row) => ({
         id: row.id, correction_no: row.correction_no, status: row.status, reason: row.reason,
-        delta: Number(byNote.get(row.id)?.return_quantity_delta ?? 0),
+        delta: Number(byNote.get(row.id)?.return_quantity_delta ?? 0), posted_at: row.posted_at,
       })));
     }
     void loadHistory();
@@ -188,7 +198,7 @@ export default function ReturnCorrectionPanel() {
     <label className="field reason-field"><span>更正原因</span><input value={reason} onChange={(event) => { resetKeys(); setReason(event.target.value); }} maxLength={1000} disabled={busy || Boolean(correction)} placeholder="例如：退回數量誤登" /></label>
     <label className="field reason-field"><span>備註（選填）</span><input value={note} onChange={(event) => { resetKeys(); setNote(event.target.value); }} maxLength={2000} disabled={busy || Boolean(correction)} /></label>
     {validationError ? <p className="auth-message">{validationError}</p> : null}
-    {history.length > 0 ? <div className="table-wrap"><table><thead><tr><th>更正單號</th><th>狀態</th><th>退回量差額</th><th>原因</th></tr></thead><tbody>{history.map((row) => <tr key={row.id}><td>{row.correction_no}</td><td>{row.status}</td><td>{row.delta}</td><td>{row.reason}</td></tr>)}</tbody></table></div> : null}
+    <CorrectionHistoryTable ariaLabel="退回更正歷史" rows={historyRows} deltaLabel="退回量差額" />
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(correction) || !selectedLine}>{busy ? "建立中…" : "建立退回更正草稿"}</button>{correction?.status === "DRAFT" ? <button className="secondary-button" type="button" onClick={() => void postCorrection()} disabled={busy}>{busy ? "POST 中…" : "確認並 POST 更正"}</button> : null}{correction ? <button className="secondary-button" type="button" onClick={startAnother} disabled={busy}>建立另一筆更正</button> : null}</div>
     {correction ? <p className="success-note">更正單 {correction.correction_no}／狀態 {correction.status}。{correction.status === "DRAFT" ? "請確認數量與理由後 POST。" : "更正已鎖定。"}</p> : null}
     {message ? <p className={message.includes("已") ? "success-note" : "auth-message"} role="status">{message}</p> : null}

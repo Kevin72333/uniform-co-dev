@@ -4,7 +4,7 @@
 
 `ModuleWorkbench` 是正式 Next.js 應用的子功能導覽 seam。它把同一業務模組內的標題、說明、工具列、頁籤、ARIA 關聯與內容狀態保存集中在一個深模組；呼叫端只需提供頁籤 id、名稱與內容。`RetainedPanelSet` 是其下層的掛載 seam，並由 workspace 與 workspace module 導覽共同使用。
 
-商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼的大型清單再共用 [`ManagementCatalogTable`](./management-catalog.md)，集中欄位顯示、密度、每頁筆數與完整分頁；`ModuleWorkbench` 不重複承擔清單資料操作。
+商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼與五種更正歷史的大型清單再共用 [`ManagementCatalogTable`](./management-catalog.md)，集中欄位顯示、密度、每頁筆數與完整分頁；`CorrectionHistoryTable` 是更正 panel 的唯讀 adapter；`ModuleWorkbench` 不重複承擔清單資料操作。
 
 預設 `visited` mount policy 只掛載目前 panel；使用者實際開啟後才保留該 panel instance，切換時以 `hidden` 保存未送出的草稿。這個策略同時套用在七個 workspace、各 workspace module 與 `ModuleWorkbench` 子頁籤，避免登入後由尚未開啟的面板同時發出 Supabase 查詢。資料讀寫 implementation 仍留在原 panel、domain function、server-side route 與 Supabase RPC，工作台不繞過 RLS、冪等、稽核或 POST 狀態機。
 
@@ -39,11 +39,11 @@
 | 帳號管理 | 已套用 | 帳號清單、新增帳號、帳號設定；刪除登入身份使用頁面內二次確認 |
 | 庫存管理 | 已套用 | 兩倉可用量、異動操作、期初庫存、歷史匯出、規則試算 |
 | 人資需求 | 已套用 | 制服需求、額外補庫、員工退回 |
-| 人資更正 | 已套用 | 發放更正、退回更正 |
+| 人資更正 | 已套用 | 發放更正、退回更正；歷史清單支援搜尋／狀態篩選／分頁 |
 | 員工主檔 | 已套用 | 員工清單、獨立新增／修改／停用表單、批次匯入、稽核匯出 |
-| 倉庫盤點／更正 | 已套用 | 庫存盤點、調庫更正、盤點更正 |
+| 倉庫盤點／更正 | 已套用 | 庫存盤點、調庫更正、盤點更正；歷史清單支援搜尋／狀態篩選／分頁 |
 | 採購決策 | 已套用 | 採購決策、差異原因碼 |
-| 採購入庫 | 已套用 | 採購入庫、入庫更正 |
+| 採購入庫 | 已套用 | 採購入庫、入庫更正；歷史清單支援搜尋／狀態篩選／分頁 |
 | 換季活動 | 已套用 | 活動設定、需求登記 |
 | 正式文件 | 已套用 | 正式 PDF、鼎新 ERP |
 | 組織主檔 | 已套用 | 機構／部門清單、獨立新增／修改／停用表單、批次匯入／匯出 |

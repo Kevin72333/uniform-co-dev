@@ -2,7 +2,7 @@
 
 ## 目的
 
-`ManagementCatalogTable` 是帳號、商品、組織、員工、兩倉庫存、營運報表與採購差異原因碼共用的管理清單 module。它把欄位顯示、資料密度、每頁筆數、目前範圍、首末頁導覽、排序表頭與空狀態集中在同一個 interface；各業務清單只提供欄位定義、已篩選排序的資料列及逐列操作。
+`ManagementCatalogTable` 是帳號、商品、組織、員工、兩倉庫存、營運報表、採購差異原因碼與更正歷史共用的管理清單 module。它把欄位顯示、資料密度、每頁筆數、目前範圍、首末頁導覽、排序表頭與空狀態集中在同一個 interface；各業務清單只提供欄位定義、已篩選排序的資料列及逐列操作。
 
 這個模式參考 SPSV29 的欄位設定與大型清單操作，但不移植其全域狀態或直接刪除流程。資料載入、RLS、匯出稽核、編輯表單與 mutation RPC 仍留在各自的業務 module。
 
@@ -26,6 +26,12 @@ module 內部負責：
 
 純計算 interface 位於 `src/domain/management-catalog.ts`，涵蓋 page window、page size normalization 與欄位可見性。React implementation 位於 `src/app/ManagementCatalogTable.tsx`。
 
+## 更正歷史 adapter
+
+`CorrectionHistoryTable` 位於 `src/app/CorrectionHistoryTable.tsx`，是五個更正 panel 共用的唯讀 adapter。各 panel 仍自行查詢來源更正 notes／lines、執行有效數量計算與呼叫受保護 RPC，只把資料映射成 `CorrectionHistoryRow` 後交給 adapter。
+
+`src/domain/correction-history.ts` 集中歷史清單的狀態標籤、狀態選項、關鍵字篩選與 workflow 順序排序。畫面提供更正單號／原因搜尋、狀態篩選、差額與過帳時間欄位、欄位顯示、密度與分頁；過帳時間預設隱藏，以維持與來源表單一致的清單密度。這些控制只改變唯讀呈現，不會改變更正資料、庫存餘額或 append-only ledger。
+
 ## 套用範圍
 
 | 清單 | 固定欄位 | 額外能力 |
@@ -37,6 +43,7 @@ module 內部負責：
 | 兩倉庫存 | 品號、狀態 | 分類／庫存狀態篩選、數量排序；有效預留預設隱藏 |
 | 營運報表 | 第一個中文欄位 | 動態中文欄位、最多 200 筆即時 view、25／50／100 筆分頁 |
 | 採購差異原因碼 | 原因碼、功能 | 搜尋、狀態篩選、明確新增／修改模式；代碼建立後鎖定 |
+| 五種更正歷史 | 更正單號 | 單號／原因搜尋、狀態篩選、差額顯示、過帳時間欄位、完整分頁；不提供歷史資料 mutation |
 
 ## 不變條件
 

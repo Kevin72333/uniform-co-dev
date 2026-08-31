@@ -339,6 +339,13 @@ body {
 .management-column-reset { border-top: 1px solid var(--line); margin-top: 4px; padding: 9px 8px 5px; text-align: left; }
 .management-catalog-browser--compact .management-catalog-table th,
 .management-catalog-browser--compact .management-catalog-table td { padding-bottom: 8px; padding-top: 8px; }
+.correction-history-browser { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
+.correction-history-heading { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
+.correction-history-heading h3 { margin: 0; }
+.correction-history-heading p { margin: 5px 0 0; }
+.correction-history-heading .status-pill { flex: 0 0 auto; margin-top: 2px; }
+.correction-history-filters { margin-top: 14px; }
+.correction-history-table { max-height: 380px; }
 .management-note-cell { max-width: 320px; white-space: normal; }
 .employee-catalog-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 .employee-catalog-actions button { margin: 0; }

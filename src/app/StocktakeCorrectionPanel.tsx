@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import CorrectionHistoryTable from "@/src/app/CorrectionHistoryTable";
+import type { CorrectionHistoryRow } from "@/src/domain/correction-history";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 import { validateStocktakeCorrectionInput } from "@/src/domain/stocktake-correction";
 
 type Source = { lineId: string; stocktakeId: string; stocktakeNo: string; itemCode: string; itemName: string; warehouseId: string; counted: number; book: number };
 type Correction = { id: string; correction_no: string; status: "DRAFT" | "POSTED" };
-type History = { id: string; correction_no: string; status: string; reason: string; delta: number };
+type History = { id: string; correction_no: string; status: string; reason: string; delta: number; posted_at: string | null };
 const PREFIX = "uniform:stocktake-correction";
 
 export default function StocktakeCorrectionPanel() {
@@ -25,6 +27,14 @@ export default function StocktakeCorrectionPanel() {
   const recoveredSourceRef = useRef<string | null>(null);
   const selected = useMemo(() => sources.find((source) => source.lineId === sourceId), [sources, sourceId]);
   const validationError = validateStocktakeCorrectionInput({ countedQuantityDelta: delta, reason });
+  const historyRows: CorrectionHistoryRow[] = useMemo(() => history.map((item) => ({
+    id: item.id,
+    correctionNo: item.correction_no,
+    status: item.status,
+    reason: item.reason,
+    deltaText: String(item.delta),
+    postedAt: item.posted_at,
+  })), [history]);
 
   useEffect(() => {
     if (!client) return;
@@ -75,14 +85,14 @@ export default function StocktakeCorrectionPanel() {
     const source = selected;
     let active = true;
     async function loadHistory() {
-      const { data: notes } = await supabase.from("correction_notes").select("id,correction_no,status,reason").eq("correction_kind", "STOCKTAKE").eq("original_stocktake_id", source.stocktakeId).order("id", { ascending: false });
+      const { data: notes } = await supabase.from("correction_notes").select("id,correction_no,status,reason,posted_at").eq("correction_kind", "STOCKTAKE").eq("original_stocktake_id", source.stocktakeId).order("id", { ascending: false });
       if (!active) return;
       const ids = (notes ?? []).map((note) => note.id as string);
       if (!ids.length) { setHistory([]); return; }
       const { data: lines } = await supabase.from("stocktake_correction_lines").select("correction_note_id,original_stocktake_line_id,counted_quantity_delta").in("correction_note_id", ids);
       if (!active) return;
       const byNote = new Map((lines ?? []).filter((line) => line.original_stocktake_line_id === source.lineId).map((line) => [line.correction_note_id as string, line]));
-      setHistory((notes ?? []).filter((note) => byNote.has(note.id as string)).map((note) => ({ id: note.id as string, correction_no: note.correction_no as string, status: note.status as string, reason: note.reason as string, delta: Number(byNote.get(note.id as string)?.counted_quantity_delta ?? 0) })));
+      setHistory((notes ?? []).filter((note) => byNote.has(note.id as string)).map((note) => ({ id: note.id as string, correction_no: note.correction_no as string, status: note.status as string, reason: note.reason as string, delta: Number(byNote.get(note.id as string)?.counted_quantity_delta ?? 0), posted_at: note.posted_at as string | null })));
     }
     void loadHistory();
     return () => { active = false; };
@@ -120,7 +130,7 @@ export default function StocktakeCorrectionPanel() {
       <label className="field"><span>更正單號</span><input value={correctionNo} onChange={(event) => { resetKeys(); setCorrectionNo(event.target.value); }} maxLength={80} disabled={busy || Boolean(correction)} placeholder="例如 STC-2026-001" /></label>
       <label className="field"><span>實盤量差額</span><input type="number" step={1} value={delta} onChange={(event) => { resetKeys(); setDelta(Number(event.target.value) || 0); }} disabled={busy || Boolean(correction)} /></label>
     </div>
-    {history.length > 0 ? <div className="table-wrap"><table><thead><tr><th>更正單號</th><th>狀態</th><th>實盤差額</th><th>原因</th></tr></thead><tbody>{history.map((item) => <tr key={item.id}><td>{item.correction_no}</td><td>{item.status}</td><td>{item.delta}</td><td>{item.reason}</td></tr>)}</tbody></table></div> : null}
+    <CorrectionHistoryTable ariaLabel="盤點更正歷史" rows={historyRows} deltaLabel="實盤差額" />
     <label className="field reason-field"><span>更正原因</span><input value={reason} onChange={(event) => { resetKeys(); setReason(event.target.value); }} maxLength={500} disabled={busy || Boolean(correction)} placeholder="例如：複盤後發現漏盤" /></label>
     {validationError ? <p className="auth-message">{validationError}</p> : null}
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(correction) || !selected}>{busy ? "建立中…" : "建立更正草稿"}</button>{correction?.status === "DRAFT" ? <button className="secondary-button" type="button" onClick={() => void postDraft()} disabled={busy}>{busy ? "POST 中…" : "確認並 POST 更正"}</button> : null}{correction ? <button className="secondary-button" type="button" onClick={startAnother} disabled={busy}>建立另一筆更正</button> : null}</div>

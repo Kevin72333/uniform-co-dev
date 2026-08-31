@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import CorrectionHistoryTable from "@/src/app/CorrectionHistoryTable";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 import { validateHrIssueCorrectionInput } from "@/src/domain/hr-issue-correction";
+import type { CorrectionHistoryRow } from "@/src/domain/correction-history";
 
 type Request = { id: string; request_no: string; status: "SHIPPED" | string; distribution_date: string };
 type IssueLine = { id: string; request_id: string; line_no: number; employee_no_snapshot: string | null; employee_name_snapshot: string | null; item_code_snapshot: string | null; item_name_snapshot: string | null; quantity: number };
@@ -29,6 +31,14 @@ export default function HrIssueCorrectionPanel() {
   const selectedLine = useMemo(() => lines.find((line) => line.id === lineId), [lines, lineId]);
   const selectedRequest = useMemo(() => requests.find((request) => request.id === selectedLine?.request_id), [requests, selectedLine]);
   const validationError = validateHrIssueCorrectionInput({ issueQuantityDelta: delta, reason });
+  const historyRows: CorrectionHistoryRow[] = useMemo(() => history.map((item) => ({
+    id: item.id,
+    correctionNo: item.correction_no,
+    status: item.status,
+    reason: item.reason,
+    deltaText: String(item.issue_quantity_delta),
+    postedAt: item.posted_at,
+  })), [history]);
 
   useEffect(() => {
     if (!client) return;
@@ -178,7 +188,7 @@ export default function HrIssueCorrectionPanel() {
       <label className="field"><span>發放量差額</span><input type="number" step={1} value={delta} onChange={(event) => { resetKeys(); setDelta(Number(event.target.value) || 0); }} disabled={busy || Boolean(correction)} /></label>
     </div>
     {selectedLine ? <div className="metric"><span>目前有效發放量（原始 + 已 POST 更正）</span><strong>{selectedLine.quantity + postedDelta}</strong><small>{history.filter((item) => item.status === "POSTED").length > 0 ? `已有 ${history.filter((item) => item.status === "POSTED").length} 筆已 POST 更正` : "尚無已 POST 更正"}</small></div> : null}
-    {history.length > 0 ? <div className="table-wrap"><table><thead><tr><th>更正單號</th><th>狀態</th><th>發放差額</th><th>原因</th></tr></thead><tbody>{history.map((item) => <tr key={item.id}><td>{item.correction_no}</td><td>{item.status}</td><td>{item.issue_quantity_delta}</td><td>{item.reason}</td></tr>)}</tbody></table></div> : null}
+    <CorrectionHistoryTable ariaLabel="人資發放更正歷史" rows={historyRows} deltaLabel="發放差額" />
     <label className="field reason-field"><span>更正原因</span><input value={reason} onChange={(event) => { resetKeys(); setReason(event.target.value); }} maxLength={500} disabled={busy || Boolean(correction)} placeholder="例如：補發一件制服" /></label>
     {validationError ? <p className="auth-message">{validationError}</p> : null}
     <div className="button-row"><button className="primary-button" type="button" onClick={() => void createDraft()} disabled={busy || Boolean(correction) || !selectedLine}>{busy ? "建立中…" : "建立更正草稿"}</button>{correction?.status === "DRAFT" ? <button className="secondary-button" type="button" onClick={() => void postDraft()} disabled={busy}>{busy ? "POST 中…" : "確認並 POST 更正"}</button> : null}{correction ? <button className="secondary-button" type="button" onClick={startAnother} disabled={busy}>建立另一筆更正</button> : null}</div>

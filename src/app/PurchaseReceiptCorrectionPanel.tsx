@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import CorrectionHistoryTable from "@/src/app/CorrectionHistoryTable";
+import type { CorrectionHistoryRow } from "@/src/domain/correction-history";
 import { getSupabaseBrowserClient } from "@/src/lib/supabase-browser";
 import { validateReceiptCorrectionInput } from "@/src/domain/receipt-correction";
 
@@ -38,6 +40,14 @@ export default function PurchaseReceiptCorrectionPanel() {
     rejectionReason,
     reason,
   });
+  const historyRows: CorrectionHistoryRow[] = useMemo(() => history.map((item) => ({
+    id: item.id,
+    correctionNo: item.correction_no,
+    status: item.status,
+    reason: item.reason,
+    deltaText: `${item.delivered_quantity_delta}／${item.accepted_quantity_delta}／${item.rejected_quantity_delta}`,
+    postedAt: item.posted_at,
+  })), [history]);
 
   useEffect(() => {
     if (!client) return;
@@ -222,7 +232,7 @@ export default function PurchaseReceiptCorrectionPanel() {
       }), { delivered: selectedLine.delivered_quantity, accepted: selectedLine.accepted_quantity, rejected: selectedLine.rejected_quantity });
       return <div className="metric"><span>目前有效數量（原始 + 已 POST 更正）</span><strong>到貨 {effective.delivered}／合格 {effective.accepted}／拒收 {effective.rejected}</strong><small>{posted.length > 0 ? `已有 ${posted.length} 筆已 POST 更正` : "尚無已 POST 更正"}</small></div>;
     })() : null}
-    {history.length > 0 ? <div className="table-wrap"><table><thead><tr><th>更正單號</th><th>狀態</th><th>差額（到貨／合格／拒收）</th><th>原因</th></tr></thead><tbody>{history.map((item) => <tr key={item.id}><td>{item.correction_no}</td><td>{item.status}</td><td>{item.delivered_quantity_delta}／{item.accepted_quantity_delta}／{item.rejected_quantity_delta}</td><td>{item.reason}</td></tr>)}</tbody></table></div> : null}
+    <CorrectionHistoryTable ariaLabel="採購入庫更正歷史" rows={historyRows} deltaLabel="差額（到貨／合格／拒收）" />
     <label className="field reason-field"><span>更正原因</span><input value={reason} onChange={(event) => { resetOperationKeys(); setReason(event.target.value); }} maxLength={500} disabled={busy || Boolean(correction)} placeholder="例如：供應商補送後更正原收貨紀錄" /></label>
     <label className="field reason-field"><span>拒收理由（拒收差額增加時必填）</span><input value={rejectionReason} onChange={(event) => { resetOperationKeys(); setRejectionReason(event.target.value); }} maxLength={500} disabled={busy || Boolean(correction)} placeholder="例如：補驗後判定瑕疵" /></label>
     {validationError ? <p className="auth-message">{validationError}</p> : null}
